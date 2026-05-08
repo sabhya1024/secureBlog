@@ -27,7 +27,4 @@
 <li>Performance: Optimized API queries using MongoDB Projection (.select()) and Pagination (.skip()/.limit()) to ensure fast home feed loading.</li>
 
 <ul>
-## Screenshots
 
-![Home Feed](POC/Login.png)
-![Auth Page](POC/successfulSignup.png)
