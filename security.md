@@ -1,75 +1,79 @@
 <h1>Security Measures and Defenses</h1>
 
-<p>The Secure MERN Blog Platform is designed with a <strong>secure-by-default</strong> philosophy, following OWASP Top 10 guidelines to defend against common web vulnerabilities.</p>
+<p>The Secure MERN Blog Platform is designed with a <strong>secure-by-default</strong> philosophy, following OWASP Top 10 guidelines to defend against common web vulnerabilities. Currently maintaining an 8.5/10 Enterprise Security Rating.</p>
 
 <h2>1. Authentication and Credential Defense</h2>
 <ul>
   <li><strong>Password Hashing (Argon2id)</strong>
     <ul>
       <li>OWASP: A02 – Cryptographic Failures</li>
-      <li>Passwords are hashed using Argon2id with memory cost and multiple iterations to resist brute-force attacks, including GPU attacks.</li>
+      <li>Passwords are hashed using Argon2id with memory cost and multiple iterations (12MB memory, 3 time cost) to resist brute-force attacks, including GPU attacks.</li>
     </ul>
   </li>
-  <li><strong>Session Isolation (HttpOnly Cookies)</strong>
+  <li><strong>Dual-Token Strategy & Session Isolation</strong>
     <ul>
       <li>OWASP: A07 – Identification Failures</li>
-      <li>JWT tokens are stored in HttpOnly cookies, inaccessible to client-side JavaScript, mitigating XSS-based token theft.</li>
+      <li>Short-lived access tokens (15min) are used alongside long-lived refresh tokens stored in HttpOnly, Secure, SameSite=Strict cookies. This mitigates XSS token theft and CSRF attacks.</li>
+      <li>Tokens are tracked in Redis, hashed with SHA-256 prior to storage, and support dynamic revocation/rotation.</li>
     </ul>
   </li>
-  <li><strong>Tiered Rate Limiting</strong>
+  <li><strong>Anti-Brute Force & Account Lockouts</strong>
     <ul>
       <li>OWASP: A04 – Insecure Design / Resource Exhaustion</li>
-      <li>Critical endpoints (/signin, /signup) are limited to 7 attempts/hour to prevent brute-force attacks without affecting normal traffic.</li>
+      <li>Critical endpoints (/signin, /signup) are protected by a Tiered Rate Limiter (20 requests/15min).</li>
+      <li>Accounts are locked for 15 minutes after 5 failed login attempts to destroy dictionary attacks.</li>
     </ul>
   </li>
   <li><strong>Hybrid Login / Account Merging</strong>
     <ul>
-      <li>OWASP: A07 – Identification Failures</li>
-      <li>Google OAuth login merges with existing accounts safely, ensuring users cannot bypass authentication while maintaining a smooth UX.</li>
+      <li>Google OAuth login uses Firebase Admin SDK on the backend to verify the ID token. It safely merges with existing accounts without bypassing security.</li>
     </ul>
   </li>
 </ul>
 
 <h2>2. Injection and Data Integrity</h2>
 <ul>
-  <li><strong>Input Sanitization</strong>
+  <li><strong>Input Sanitization & Validation</strong>
     <ul>
       <li>OWASP: A03 – Injection (XSS)</li>
-      <li>All user input (title, description, tags) is sanitized using <code>validator.escape()</code> to convert HTML characters into harmless entities.</li>
+      <li>User input is sanitized using <code>validator.escape()</code>. Emails undergo <code>validator.normalizeEmail()</code> to prevent bypassing uniqueness checks.</li>
+      <li>Profile social links undergo strict domain whitelisting (e.g., rejecting non-YouTube URLs in the YouTube slot).</li>
     </ul>
   </li>
   <li><strong>Data Type Enforcement (Mongoose)</strong>
     <ul>
       <li>OWASP: A03 – Injection (NoSQL)</li>
-      <li>Mongoose validates data types and prevents operators like <code>$gt</code> from being injected into string fields, reducing NoSQL injection risks.</li>
-    </ul>
-  </li>
-  <li><strong>URL Validation</strong>
-    <ul>
-      <li>OWASP: A03 – Injection</li>
-      <li>Blog banner URLs are strictly validated with <code>validator.isURL</code> to enforce HTTPS and prevent malicious URLs from being saved.</li>
+      <li>Mongoose validates data types and prevents operators like <code>$gt</code> from being injected into string fields, eliminating NoSQL injection risks.</li>
     </ul>
   </li>
 </ul>
 
-<h2>3. Access Control and Server Hardening</h2>
+<h2>3. File Upload Security</h2>
 <ul>
-  <li><strong>Granular Authorization (verifyJWT middleware)</strong>
+  <li><strong>Magic-Bytes & Stream Validation</strong>
     <ul>
-      <li>OWASP: A01 – Broken Access Control</li>
-      <li>Routes like <code>/create-blog</code> only allow the authenticated user (from validated JWT) to post, preventing IDOR attacks.</li>
+      <li>OWASP: A04 – Insecure Design</li>
+      <li>File uploads are validated at the binary level using magic-bytes checking, rather than trusting file extensions, preventing malicious executables (e.g., PHP scripts disguised as JPGs) from bypassing filters.</li>
     </ul>
   </li>
+  <li><strong>Signed Cloudinary Uploads</strong>
+    <ul>
+      <li>All uploads are limited to 5MB, strictly typed (JPEG/PNG/WebP), and cryptographically signed by the backend before interacting with Cloudinary. Client never receives the API secret.</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>4. Access Control and Server Hardening</h2>
+<ul>
   <li><strong>Server Headers / Hardening (Helmet)</strong>
     <ul>
       <li>OWASP: A05 – Security Misconfiguration</li>
-      <li>Helmet middleware removes sensitive headers like <code>X-Powered-By</code> to make server fingerprinting harder.</li>
+      <li>Helmet middleware injects 11 security headers (X-Frame-Options, HSTS, CSP, etc.) and removes fingerprinting headers like <code>X-Powered-By</code>.</li>
     </ul>
   </li>
-  <li><strong>Non-guessable Unique IDs</strong>
+  <li><strong>CORS & Environment Protection</strong>
     <ul>
-      <li>OWASP: A01 – Broken Access Control</li>
-      <li>Blog IDs use  nanoid, making them non-sequential and preventing automated enumeration attacks.</li>
+      <li>CORS is strictly locked to the frontend URL with <code>credentials: true</code>. Database shuts down (<code>process.exit(1)</code>) immediately if environment variables or connections fail to prevent ghost server execution.</li>
     </ul>
   </li>
 </ul>
