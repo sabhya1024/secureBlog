@@ -1,0 +1,1 @@
+# Purpose: Stores configuration files like Database connection (MongoDB) and Cloudinary setup.
