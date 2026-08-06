@@ -5,15 +5,13 @@ import { UserContext } from "../App";
 import { removeFromSession } from "../common/session";
 
 const UserNavigationPanel = () => {
-  const {
-    userAuth: { username },
-    setUserAuth,
-  } = useContext(UserContext);
+  const { userAuth, setUserAuth } = useContext(UserContext);
+  const username = userAuth?.user?.username || userAuth?.username;
 
   const signOutUser = () => {
     removeFromSession("user");
     setUserAuth({
-      accessToken: null,
+      access_token: null,
       profile_img: null,
       username: null,
     });

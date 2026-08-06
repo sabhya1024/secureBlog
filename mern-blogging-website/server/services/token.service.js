@@ -1,5 +1,5 @@
 import {
-  generateAccessToken,
+  generateaccess_token,
   generateRefreshToken,
   verifyRefreshToken,
 } from "../utils/tokenUtils.js";
@@ -12,7 +12,7 @@ const hashToken = (token) => {
 import redisClient from "../utils/redisClient.js";
 
 export const createSession = async (user) => {
-  const accessToken = generateAccessToken(user._id);
+  const access_token = generateaccess_token(user._id);
   const refreshToken = generateRefreshToken(user._id);
   const hashedToken = hashToken(refreshToken);
 
@@ -22,7 +22,7 @@ export const createSession = async (user) => {
     { EX: 7 * 24 * 60 * 60 }, // 7 days
   );
 
-  return { accessToken, refreshToken };
+  return { access_token, refreshToken };
 };
 
 export const rotateRefreshToken = async (oldToken, user) => {
@@ -34,7 +34,6 @@ export const rotateRefreshToken = async (oldToken, user) => {
 
   const hashedOldToken = hashToken(oldToken);
 
- 
   const userId = await redisClient.get(hashedOldToken);
 
   if (!userId) {
@@ -45,7 +44,7 @@ export const rotateRefreshToken = async (oldToken, user) => {
   await redisClient.del(hashedOldToken);
 
   //generate new tokens
-  const newAccessToken = generateAccessToken(user._id);
+  const newaccess_token = generateaccess_token(user._id);
   const newRefreshToken = generateRefreshToken(user._id);
 
   const newHashed = hashToken(newRefreshToken);
@@ -55,5 +54,5 @@ export const rotateRefreshToken = async (oldToken, user) => {
     EX: 7 * 24 * 60 * 60,
   });
 
-  return { newAccessToken, newRefreshToken };
+  return { newaccess_token, newRefreshToken };
 };

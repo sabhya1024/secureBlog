@@ -1,7 +1,10 @@
 import User from "../models/User.js";
 import { hashPassword, comparePassword } from "../utils/passwordUtils.js";
 
-import { createSession, rotateRefreshToken } from "../services/token.service.js";
+import {
+  createSession,
+  rotateRefreshToken,
+} from "../services/token.service.js";
 
 import { getAuth } from "firebase-admin/auth";
 import { nanoid } from "nanoid";
@@ -26,13 +29,13 @@ const generateUsername = async () => {
       "personal_info.username": username,
     });
   }
-  
+
   return username;
 };
 
-const formatDataToSend = (user, accessToken) => {
+const formatDataToSend = (user, access_token) => {
   return {
-    accessToken,
+    access_token,
     user: {
       profile_img: user.personal_info.profile_img,
       username: user.personal_info.username,
@@ -45,8 +48,6 @@ const formatDataToSend = (user, accessToken) => {
 export const signup = async (req, res) => {
   let { fullname, email, password } = req.body;
   try {
-
-
     email = email?.toLowerCase().trim();
     password = password?.trim();
     fullname = fullname?.trim();
@@ -106,7 +107,7 @@ export const signup = async (req, res) => {
     });
 
     // 6. Generate Tokens
-    const { accessToken, refreshToken } = await createSession(user)
+    const { access_token, refreshToken } = await createSession(user);
 
     // 7. Send Refresh Token in a "Locked" HttpOnly Cookie
     res.cookie("refreshToken", refreshToken, {
@@ -117,7 +118,7 @@ export const signup = async (req, res) => {
     });
 
     // 8. Send Access Token + User Info (Exclude password!)
-    return res.status(201).json(formatDataToSend(user, accessToken));
+    return res.status(201).json(formatDataToSend(user, access_token));
   } catch (err) {
     console.error(`[SECURITY-CRITICAL]: Signup Error: ${err.message}`);
     return res
@@ -129,7 +130,6 @@ export const signup = async (req, res) => {
 export const signin = async (req, res) => {
   let { email, password } = req.body;
   try {
-
     email = email?.toLowerCase().trim();
     password = password?.trim();
 
@@ -193,7 +193,7 @@ export const signin = async (req, res) => {
     await user.save();
 
     //   generating tokens
-    const { accessToken, refreshToken } = await createSession(user);
+    const { access_token, refreshToken } = await createSession(user);
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
@@ -202,7 +202,7 @@ export const signin = async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    return res.status(200).json(formatDataToSend(user, accessToken));
+    return res.status(200).json(formatDataToSend(user, access_token));
   } catch (error) {
     console.warn("Failed login attempt", {
       email,
@@ -215,7 +215,7 @@ export const signin = async (req, res) => {
 
 export const google_auth = async (req, res) => {
   try {
-    let { accessToken: firebaseToken } = req.body;
+    let { access_token: firebaseToken } = req.body;
     if (!firebaseToken) {
       return res.status(400).json({
         error: "Google token missing.",
@@ -256,12 +256,10 @@ export const google_auth = async (req, res) => {
 
       let u = await user.save();
       user = u;
-
     }
 
     //tokens for the Google user
-    const { accessToken, refreshToken } = await createSession(user)
-
+    const { access_token, refreshToken } = await createSession(user);
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
@@ -269,7 +267,7 @@ export const google_auth = async (req, res) => {
       sameSite: "Strict",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
-    return res.status(200).json(formatDataToSend(user, accessToken));
+    return res.status(200).json(formatDataToSend(user, access_token));
   } catch (err) {
     console.error(`[SECURITY-CRITICAL]: Google Auth Error: ${err.message}`);
     return res.status(500).json({ error: "Google authentication failed." });
@@ -277,20 +275,24 @@ export const google_auth = async (req, res) => {
 };
 
 export const logout = async (req, res) => {
-  const token = req.cookies.refreshToken;
+  try {
+    const token = req.cookies.refreshToken;
 
+    if (token) {
+      const hashedToken = hashToken(token);
+      await redisClient.del(hashedToken);
+    }
 
-  if (token) {
-    const hashedToken = hashToken(token);
-    await redisClient.del(hashedToken)
+    res.clearCookie("refreshToken");
+
+    return res.status(200).json({
+      status: "success",
+      message: "Logged out successfully",
+    });
+  } catch (err) {
+    console.error(`Logout Error: ${err.message}`);
+    return res.status(500).json({ error: "Failed to logout" });
   }
-
-  res.clearCookie("refreshToken");
-
-  return res.status(200).json({
-    status: "success",
-    message: "Logged out successfully",
-  });
 };
 
 export const setPassword = async (req, res) => {
@@ -332,13 +334,13 @@ export const setPassword = async (req, res) => {
 export const linkGoogle = async (req, res) => {
   try {
     const userId = req.user; // authenticated user
-    const { accessToken } = req.body;
+    const { access_token } = req.body;
 
-    if (!accessToken) {
+    if (!access_token) {
       return res.status(400).json({ error: "Google token missing" });
     }
 
-    const decoded = await getAuth().verifyIdToken(accessToken);
+    const decoded = await getAuth().verifyIdToken(access_token);
 
     const user = await User.findById(userId);
 
@@ -388,17 +390,16 @@ export const refreshTokenHandler = async (req, res) => {
       });
     }
 
-
     const user = await User.findById(userId);
     if (!user) {
       return res.status(403).json({ error: "User not found." });
     }
 
-
     // token rotation
-    const { newAccessToken, newRefreshToken } = await rotateRefreshToken
-      (oldToken, user)
-
+    const { newaccess_token, newRefreshToken } = await rotateRefreshToken(
+      oldToken,
+      user,
+    );
 
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
@@ -407,7 +408,7 @@ export const refreshTokenHandler = async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    return res.json({ accessToken: newAccessToken });
+    return res.json({ access_token: newaccess_token });
   } catch (err) {
     return res.status(500).json({ error: "Server error" });
   }

@@ -20,7 +20,7 @@ const HomePage = () => {
   const fetchCategories = async () => {
     try {
       let { data } = await axios.get(
-        import.meta.env.VITE_SERVER_DOMAIN + "/api/blog/categories",
+        import.meta.env.VITE_BACKEND_URL + "/blog/categories",
       );
       setCategories(data.categories);
     } catch (error) {
@@ -36,31 +36,31 @@ const HomePage = () => {
       if (pageState !== "home") {
         // Fetching by Category Pill
         let { data } = await axios.post(
-          import.meta.env.VITE_SERVER_DOMAIN + "/api/blog/search-blogs",
-          { tag: pageState, page }
+          import.meta.env.VITE_BACKEND_URL + "/blog/search-blogs",
+          { tag: pageState, page },
         );
         let formatedData = await filterPaginationData({
           state: blogs,
           data: data.blogs,
           page,
-          countRoute: "/api/blog/search-blogs-count",
+          countRoute: "/blog/search-blogs-count",
           data_to_send: { tag: pageState },
-          create_new_arr: page === 1
+          create_new_arr: page === 1,
         });
         setBlog(formatedData);
       } else {
         // Fetching main feed (with or without search/filters)
         let { data } = await axios.post(
-          import.meta.env.VITE_SERVER_DOMAIN + "/api/blog/filter-blogs",
-          { query: searchQuery, filterBy: activeFilter, page }
+          import.meta.env.VITE_BACKEND_URL + "/blog/filter-blogs",
+          { query: searchQuery, filterBy: activeFilter, page },
         );
         let formatedData = await filterPaginationData({
           state: blogs,
           data: data.blogs,
           page,
-          countRoute: "/api/blog/filter-blogs-count",
+          countRoute: "/blog/filter-blogs-count",
           data_to_send: { query: searchQuery, filterBy: activeFilter },
-          create_new_arr: page === 1
+          create_new_arr: page === 1,
         });
         setBlog(formatedData);
       }
@@ -100,7 +100,7 @@ const HomePage = () => {
 
   // Re-fetch blogs whenever the pageState (category) or activeFilter changes
   useEffect(() => {
-      fetchBlogs();
+    fetchBlogs();
   }, [pageState, activeFilter]);
 
   return (
@@ -115,8 +115,6 @@ const HomePage = () => {
               {/* Home Feed Context (Search & Filter UI) */}
               <>
                 <div className="flex gap-4 mb-8 flex-col sm:flex-row items-center">
-
-
                   <div className="relative w-full sm:w-auto">
                     <i className="fi fi-rr-settings-sliders absolute left-5 top-1/2 -translate-y-1/2 text-xl text-dark-grey pointer-events-none"></i>
                     <select
@@ -148,10 +146,16 @@ const HomePage = () => {
                     );
                   })
                 ) : (
-                  <NoDataMessage message={pageState === "home" ? "No blogs published" : "No blogs published in this category"} />
-                              )}
-                              
-                              <LoadMoreDataBtn state={blogs} fetchDataFun={fetchBlogs} />
+                  <NoDataMessage
+                    message={
+                      pageState === "home"
+                        ? "No blogs published"
+                        : "No blogs published in this category"
+                    }
+                  />
+                )}
+
+                <LoadMoreDataBtn state={blogs} fetchDataFun={fetchBlogs} />
               </>
 
               {/* mobile categories section inside in-page navigation */}

@@ -11,10 +11,10 @@ const Navbar = () => {
   const [userNavPanel, setUserNavPanel] = useState(false);
 
   let navigate = useNavigate();
-  const {
-    userAuth,
-    userAuth: { accessToken, profile_img },
-  } = useContext(UserContext);
+
+  const { userAuth } = useContext(UserContext);
+  const access_token = userAuth?.access_token;
+  const profile_img = userAuth?.user?.profile_img || userAuth?.profile_img;
 
   const handleUserNavPanel = () => {
     setUserNavPanel((currentVal) => !currentVal);
@@ -68,7 +68,7 @@ const Navbar = () => {
             <p>Write</p>
           </Link>
 
-          {accessToken ? (
+          {access_token ? (
             <>
               <Link to="/dashboard/notifications">
                 <button className="w-12 h-12 rounded-full bg-grey relative hover:bg-black/10">

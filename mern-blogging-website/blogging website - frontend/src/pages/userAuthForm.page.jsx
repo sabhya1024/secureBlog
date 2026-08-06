@@ -15,25 +15,23 @@ let emailRegex =
 let passwordRegex = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&])\S{8,20}$/;
 
 const UserAuthForm = ({ type }) => {
+  let {
+    userAuth: { access_token },
+    setUserAuth,
+  } = useContext(UserContext);
 
-  let { userAuth: { accessToken }, setUserAuth } = useContext(UserContext)
-
-
-
-  const userAuthThroughServer = (endpoint, formData) => {
-    axios
-      .post(import.meta.env.VITE_BACKEND_URL + endpoint, formData, {
-        withCredentials: true
-      })
-      .then(({ data }) => {
-        storeInSession("user", data)
-
-        setUserAuth(data)
-      })
-
-      .catch((err) => {
-        toast.error(err.response?.data?.error || "Something went wrong");
-      });
+  const userAuthThroughServer = async (endpoint, formData) => {
+    try {
+      const { data } = await axios.post(
+        import.meta.env.VITE_BACKEND_URL + endpoint,
+        formData,
+        { withCredentials: true },
+      );
+      storeInSession("user", data);
+      setUserAuth(data);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Something went wrong");
+    }
   };
 
   const handleSubmit = (e) => {
@@ -77,34 +75,32 @@ const UserAuthForm = ({ type }) => {
   };
 
   const handleGoogleAuth = async (e) => {
-    e.preventDefault()
+    e.preventDefault();
     try {
-      const user = await authwithGoogle()
-
+      const user = await authwithGoogle();
 
       if (user) {
         const token = await user.getIdToken();
 
         let endpoint = "/auth/google-auth";
         let formData = {
-          accessToken: token,
+          access_token: token,
         };
 
         userAuthThroughServer(endpoint, formData);
       }
-
-    }
-    catch (err) {
+    } catch (err) {
       toast.error("Trouble logging in with Google");
       console.log(err);
     }
-
-  }
+  };
 
   return (
     <>
-      {accessToken ? (<Navigate to="/" />) :
-        (<AnimationWrapper keyValue={type}>
+      {access_token ? (
+        <Navigate to="/" />
+      ) : (
+        <AnimationWrapper keyValue={type}>
           <section className="h-cover flex items-center justify-center">
             <Toaster />
             <form
@@ -149,7 +145,9 @@ const UserAuthForm = ({ type }) => {
                 <p>or</p>
                 <hr className="w-1/2 border-black" />
               </div>
-              <button className="btn-dark  flex items-center justify-center gap-4 w-[90%] center"
+              <button
+                className="btn-dark  flex items-center justify-center gap-4 w-[90%] center"
+                type="button"
                 onClick={handleGoogleAuth}>
                 <img src={googleIcon} className="w-5" />
                 Continue with Google
@@ -177,7 +175,7 @@ const UserAuthForm = ({ type }) => {
             </form>
           </section>
         </AnimationWrapper>
-        )}
+      )}
     </>
   );
 };

@@ -15,58 +15,72 @@ const SearchPage = () => {
   let [blogs, setBlogs] = useState(null);
   let [users, setUsers] = useState(null);
 
-  const searchBlogs = ({ page = 1, create_new_arr = false }) => {
-    axios
-      .post(import.meta.env.VITE_SERVER_DOMAIN + "/api/blog/filter-blogs", {
-        query,
+  const searchBlogs = async ({ page = 1, create_new_arr = false }) => {
+    try {
+      const { data } = await axios.post(
+        import.meta.env.VITE_BACKEND_URL + "/blog/filter-blogs",
+        { query, page },
+      );
+      let formatedData = await filterPaginationData({
+        state: blogs,
+        data: data.blogs,
         page,
-      })
-      .then(async ({ data }) => {
-        let formatedData = await filterPaginationData({
-          state: blogs,
-          data: data.blogs,
-          page,
-          countRoute: "/api/blog/filter-blogs-count",
-          data_to_send: { query },
-          create_new_arr: page === 1,
-        });
-        setBlogs(formatedData);
-      })
-      .catch((error) => {
-        console.log(error.message);
+        countRoute: "/blog/filter-blogs-count",
+        data_to_send: { query },
+        create_new_arr: page === 1,
       });
+      setBlogs(formatedData);
+    } catch (error) {
+      console.error(error.message);
+    }
   };
 
-  const fetchUsers = () => {
-    axios
-      .post(import.meta.env.VITE_SERVER_DOMAIN + "/api/user/search-users", { query })
-      .then(({ data: { users } }) => {
-        setUsers(users);
-      });
+  const fetchUsers = async () => {
+    try {
+      const {
+        data: { users },
+      } = await axios.post(
+        import.meta.env.VITE_BACKEND_URL + "/user/search-users",
+        { query },
+      );
+      setUsers(users);
+    } catch (error) {
+      console.error(error.message);
+    }
   };
 
   useEffect(() => {
     resetState();
-      searchBlogs({ page: 1, create_new_arr: true });
-      fetchUsers();
+    searchBlogs({ page: 1, create_new_arr: true });
+    fetchUsers();
   }, [query]);
 
   const resetState = () => {
-      setBlogs(null);
-      setUsers(null)
-    };
-    
-    const UserCardWrapper = () => {
-        return (
-            <>
-                {users == null ? <Loader /> :
-                    users.length ? users.map((user, i) => {
-                    return <AnimationWrapper key={i} transition={{ duration: 1, delay: i*0.08 }}><UserCard user={user} /></AnimationWrapper>;
-                }) : <NoDataMessage message={"No user found"}/>}
-            
-            </>
-        )
-    }
+    setBlogs(null);
+    setUsers(null);
+  };
+
+  const UserCardWrapper = () => {
+    return (
+      <>
+        {users == null ? (
+          <Loader />
+        ) : users.length ? (
+          users.map((user, i) => {
+            return (
+              <AnimationWrapper
+                key={i}
+                transition={{ duration: 1, delay: i * 0.08 }}>
+                <UserCard user={user} />
+              </AnimationWrapper>
+            );
+          })
+        ) : (
+          <NoDataMessage message={"No user found"} />
+        )}
+      </>
+    );
+  };
   return (
     <section className="h-cover flex justify-center gap-10">
       <div className="w-full">
@@ -91,13 +105,11 @@ const SearchPage = () => {
             ) : (
               <NoDataMessage message="No blogs published under this query" />
             )}
-            :
+
             <LoadMoreDataBtn state={blogs} fetchDataFun={searchBlogs} />
-                  </>
-                  
-                  <UserCardWrapper>
-                      
-                  </UserCardWrapper>
+          </>
+
+          <UserCardWrapper></UserCardWrapper>
         </InPageNavigation>
       </div>
 

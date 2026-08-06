@@ -37,14 +37,17 @@ server.use(
   }),
 );
 
-// ✅ routes
 server.use("/api/auth", authLimiter, authRoutes);
 server.use("/api/upload", uploadRoutes);
 server.use("/api/blog", blogRoutes);
 server.use("/api/user", userRoutes);
 
-connectDB().then(() => {
+try {
+  await connectDB();
   server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
-});
+} catch (err) {
+  console.error("Failed to connect to Database:", err);
+  process.exit(1);
+}

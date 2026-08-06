@@ -14,9 +14,11 @@ export const filterPaginationData = async ({
     obj = { ...state, results: [...state.results, ...data], page: page };
   } else {
     try {
-      let { data: { totalDocs } } = await axios.post(
-        import.meta.env.VITE_SERVER_DOMAIN + countRoute,
-        data_to_send
+      let {
+        data: { totalDocs },
+      } = await axios.post(
+        import.meta.env.VITE_BACKEND_URL + countRoute,
+        data_to_send,
       );
 
       obj = { results: data, page: 1, totalDocs };
@@ -25,6 +27,6 @@ export const filterPaginationData = async ({
       obj = { results: data, page: 1, totalDocs: 0 };
     }
   }
-  
+
   return obj;
 };
