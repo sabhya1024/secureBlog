@@ -51,7 +51,7 @@ const userSchema = mongoose.Schema(
       },
       bio: {
         type: String,
-        maxlength: [200, "Bio should not be more than 200"],
+        maxlength: [250, "Bio should not be more than 250"],
         default: "",
       },
       profile_img: {
