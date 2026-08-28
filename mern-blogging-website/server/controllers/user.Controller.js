@@ -36,7 +36,7 @@ export const getUserProfile = async (req, res) => {
 
 export const updateProfile = async (req, res) => {
   let { username = "", bio = "", social_links = {} } = req.body;
-  let bioLimit = 150;
+  let bioLimit = 250;
 
   if (username.length < 3) {
     return res
@@ -111,3 +111,22 @@ export const updateProfile = async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 };
+
+export const updateProfileImg = async (req, res) => {
+  let { url } = req.body;
+
+  if (!url) {
+    return res.status(400).json({ error: "Image URL is required" });
+  }
+
+  try {
+    await User.findOneAndUpdate(
+      { _id: req.user },
+      { "personal_info.profile_img": url },
+    );
+    return res.status(200).json({ profile_img: url });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
