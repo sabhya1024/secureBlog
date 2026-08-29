@@ -1,6 +1,7 @@
 import { useContext, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { UserContext } from "../App";
-import axios from "axios";
+import api from "../common/api";
 import AnimationWrapper from "../common/page-animation";
 import Loader from "../components/loader.component";
 import InputBox from "../components/input.component";
@@ -35,6 +36,7 @@ const EditProfile = () => {
   const [loading, setLoading] = useState(true);
   const [charactersLeft, setCharactersLeft] = useState(250);
   const [updatedProfileImg, setUpdatedProfileImg] = useState(null);
+  const navigate = useNavigate();
 
   const profileImgEle = useRef();
   const editProfileForm = useRef();
@@ -54,7 +56,7 @@ const EditProfile = () => {
     if (access_token) {
       const getProfileData = async () => {
         try {
-          const { data } = await axios.post(
+          const { data } = await api.post(
             import.meta.env.VITE_BACKEND_URL + "/user/get-profile",
             {
               username: userAuth.user?.username || userAuth.username,
@@ -101,7 +103,7 @@ const EditProfile = () => {
     try {
       const {
         data: { secure_url },
-      } = await axios.post(
+      } = await api.post(
         `${import.meta.env.VITE_BACKEND_URL}/upload/image`,
         formData,
         {
@@ -112,7 +114,7 @@ const EditProfile = () => {
         },
       );
 
-      const { data } = await axios.post(
+      const { data } = await api.post(
         import.meta.env.VITE_BACKEND_URL + "/user/update-profile-img",
         { url: secure_url },
         {
@@ -123,7 +125,9 @@ const EditProfile = () => {
       );
 
       let newUserAuth = { ...userAuth, profile_img: data.profile_img };
-      storeInSession("user", JSON.stringify(newUserAuth));
+      if (newUserAuth.user) newUserAuth.user.profile_img = data.profile_img;
+      
+      storeInSession("user", newUserAuth);
       setUserAuth(newUserAuth);
 
       setUpdatedProfileImg(null);
@@ -162,7 +166,7 @@ const EditProfile = () => {
     e.target.setAttribute("disabled", true);
 
     try {
-      const { data } = await axios.post(
+      const { data } = await api.post(
         import.meta.env.VITE_BACKEND_URL + "/user/update-profile",
         {
           username,
@@ -176,8 +180,10 @@ const EditProfile = () => {
         },
       );
 
-      if (userAuth.username !== data.username) {
+      if (userAuth.username !== data.username && userAuth.user?.username !== data.username) {
         let newUserAuth = { ...userAuth, username: data.username };
+        if (newUserAuth.user) newUserAuth.user.username = data.username;
+
         storeInSession("user", newUserAuth);
         setUserAuth(newUserAuth);
       }
@@ -200,7 +206,14 @@ const EditProfile = () => {
         <form ref={editProfileForm}>
           <Toaster />
 
-          <h1 className="max-md:hidden">Edit Profile</h1>
+          <h1 className="max-md:hidden flex items-center gap-3">
+            Edit Profile
+            {profile.role === "admin" && (
+              <span className="text-sm bg-black text-white px-3 py-1 rounded-full font-medium">
+                Admin
+              </span>
+            )}
+          </h1>
 
           <div className="flex flex-col lg:flex-row items-start py-10 gap-8 lg:gap-10">
             <div className="max-lg:center mb-5 font-bold">
@@ -308,6 +321,52 @@ const EditProfile = () => {
                 type="submit"
                 onClick={handleSubmit}>
                 Update
+              </button>
+
+              <hr className="my-10 border-grey" />
+
+              <h2 className="text-xl font-medium text-red mb-2">Danger Zone</h2>
+              <p className="text-dark-grey text-sm mb-4">
+                Deleting your account is permanent. All your blogs, comments, and data will be removed.
+              </p>
+              <button
+                className="btn-light w-[100%] max-lg:center font-medium text-red border-red/20 hover:bg-red/10"
+                type="button"
+                onClick={async (e) => {
+                  let confirmDelete = confirm("Are you sure you want to permanently delete your account? This action cannot be undone.");
+                  if (!confirmDelete) return;
+
+                  let loadingToast = toast.loading("Deleting account...");
+                  e.target.setAttribute("disabled", true);
+
+                  try {
+                    await api.post(
+                      import.meta.env.VITE_BACKEND_URL + "/user/delete-account",
+                      {},
+                      {
+                        headers: {
+                          Authorization: `Bearer ${access_token}`,
+                        },
+                      }
+                    );
+
+                    toast.dismiss(loadingToast);
+                    toast.success("Account deleted permanently");
+                    
+                    sessionStorage.removeItem("user");
+                    setUserAuth({ access_token: null });
+                    setTimeout(() => {
+                      navigate("/");
+                    }, 500);
+
+                  } catch (err) {
+                    toast.dismiss(loadingToast);
+                    e.target.removeAttribute("disabled");
+                    toast.error(err.response?.data?.error || "Error deleting account");
+                  }
+                }}
+              >
+                Delete Account
               </button>
             </div>
           </div>

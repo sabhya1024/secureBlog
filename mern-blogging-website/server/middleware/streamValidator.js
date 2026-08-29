@@ -1,5 +1,5 @@
 import Busboy from "busboy";
-import { fileTypeFromStream } from "file-type";
+import { fileTypeStream } from "file-type";
 
 export const validateImageStream = (req, res, next) => {
   // Initialize Busboy with a 5MB limit
@@ -17,7 +17,8 @@ export const validateImageStream = (req, res, next) => {
 
     try {
       // THE MAGIC BIT CHECK: We look at the stream directly
-      const type = await fileTypeFromStream(file);
+      const streamWithFileType = await fileTypeStream(file);
+      const type = streamWithFileType.fileType;
       const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
 
       if (!type || !allowedTypes.includes(type.mime)) {
@@ -39,7 +40,7 @@ export const validateImageStream = (req, res, next) => {
 
       // If safe, we "re-attach" the file stream to the request object
       // This allows our controller to pick it up and send it to Cloudinary
-      req.fileStream = file;
+      req.fileStream = streamWithFileType;
       req.fileInfo = info;
       fileProcessed = true;
 

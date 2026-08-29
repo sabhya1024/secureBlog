@@ -3,7 +3,7 @@ import { BlogContext } from "../pages/blog.page";
 import { Link } from "react-router-dom";
 import { UserContext } from "../App";
 import { Toaster, toast } from "react-hot-toast";
-import axios from "axios";
+import api from "../common/api";
 
 const BlogInteraction = () => {
   let {
@@ -13,14 +13,15 @@ const BlogInteraction = () => {
       title,
       blog_id,
       activity: { total_likes, total_comments },
-      author: {
-        personal_info: { username: author_username },
-      },
+      author,
     },
     setBlog,
     isLikedByUser,
     setLikedByUser,
+    setCommentsWrapper,
   } = useContext(BlogContext);
+
+  let author_username = author?.personal_info?.username;
 
   let {
     userAuth: { username, access_token },
@@ -32,7 +33,7 @@ const BlogInteraction = () => {
         try {
           const {
             data: { result },
-          } = await axios.post(
+          } = await api.post(
             import.meta.env.VITE_BACKEND_URL + "/blog/is-liked-by-user",
             { _id },
             { headers: { Authorization: `Bearer ${access_token}` } },
@@ -58,7 +59,7 @@ const BlogInteraction = () => {
       });
 
       try {
-        const data = await axios.post(
+        const data = await api.post(
           import.meta.env.VITE_BACKEND_URL + "/blog/like-blog",
           { _id, likedByUser: isLikedByUser },
           {
@@ -96,7 +97,10 @@ const BlogInteraction = () => {
           </button>
           <p className="text-xl text-dark-grey">{total_likes || 0}</p>
 
-          <button className="w-10 h-10 rounded-full flex items-center justify-center bg-grey/80 hover:bg-grey/50">
+          <button className="w-10 h-10 rounded-full flex items-center justify-center bg-grey/80 hover:bg-grey/50"
+            onClick={() => 
+            setCommentsWrapper(preVal => !preVal)
+          }>
             <i className="fi fi-rr-comment-dots"></i>
           </button>
           <p className="text-xl text-dark-grey">{total_comments || 0}</p>

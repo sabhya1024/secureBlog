@@ -1,4 +1,4 @@
-import axios from "axios";
+import api from "../common/api";
 import { useContext, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import AnimationWrapper from "../common/page-animation";
@@ -47,7 +47,7 @@ const ProfilePage = () => {
 
   const fetchUserProfile = async () => {
     try {
-      const { data: user } = await axios.post(
+      const { data: user } = await api.post(
         import.meta.env.VITE_BACKEND_URL + "/user/get-profile",
         { username: profileID },
       );
@@ -76,7 +76,7 @@ const ProfilePage = () => {
   const getBlogs = async ({ page = 1, user_id }) => {
     user_id = user_id === undefined ? blogs?.user_id : user_id;
     try {
-      const { data } = await axios.post(
+      const { data } = await api.post(
         import.meta.env.VITE_BACKEND_URL + "/blog/search-blogs",
         { author: user_id, page },
       );
@@ -156,7 +156,13 @@ const ProfilePage = () => {
                           key={i}>
                           <BlogPostCard
                             content={blog}
-                            author={blog.author.personal_info}></BlogPostCard>
+                            author={
+                              blog.author?.personal_info || {
+                                fullname: "Deleted User",
+                                username: "unknown",
+                                profile_img: "https://api.dicebear.com/6.x/bottts/svg?seed=Unknown",
+                              }
+                            }></BlogPostCard>
                         </AnimationWrapper>
                       );
                     })

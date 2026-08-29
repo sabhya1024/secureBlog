@@ -41,6 +41,7 @@ const formatDataToSend = (user, access_token) => {
       username: user.personal_info.username,
       fullname: user.personal_info.fullname,
       email: user.personal_info.email,
+      role: user.role,
     },
   };
 };
@@ -106,19 +107,25 @@ export const signup = async (req, res) => {
       ip: req.ip,
     });
 
-    // 6. Generate Tokens
-    const { access_token, refreshToken } = await createSession(user);
+    try {
+      // 6. Generate Tokens
+      const { access_token, refreshToken } = await createSession(user);
 
-    // 7. Send Refresh Token in a "Locked" HttpOnly Cookie
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // Only sent over HTTPS
-      sameSite: "Strict", // Blocks CSRF
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+      // 7. Send Refresh Token in a "Locked" HttpOnly Cookie
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production", // Only sent over HTTPS
+        sameSite: "Strict", // Blocks CSRF
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
 
-    // 8. Send Access Token + User Info (Exclude password!)
-    return res.status(201).json(formatDataToSend(user, access_token));
+      // 8. Send Access Token + User Info (Exclude password!)
+      return res.status(201).json(formatDataToSend(user, access_token));
+    } catch (tokenErr) {
+      // ROLLBACK: If token generation fails (e.g. Redis error), delete the user so they aren't left in a broken state
+      await User.findByIdAndDelete(user._id);
+      throw tokenErr; // Pass to the outer catch block to return a 500 error
+    }
   } catch (err) {
     console.error(`[SECURITY-CRITICAL]: Signup Error: ${err.message}`);
     return res
@@ -229,9 +236,8 @@ export const google_auth = async (req, res) => {
     picture = picture.replace("s96-c", "s384-c");
 
     //looking for existing user ...
-    let user = await User.findOne({ "personal_info.email": email }).select(
-      "personal_info.fullname personal_info.username personal_info.profile_img google_auth",
-    );
+    let user = await User.findOne({ "personal_info.email": email });
+    let isNewUser = false;
 
     if (user) {
       if (!user.google_auth) {
@@ -247,27 +253,33 @@ export const google_auth = async (req, res) => {
         personal_info: {
           fullname: name,
           email: email,
-
           username: username,
           // no password beacuse of googleauth
         },
         google_auth: true,
       });
 
-      let u = await user.save();
-      user = u;
+      await user.save();
+      isNewUser = true;
     }
 
-    //tokens for the Google user
-    const { access_token, refreshToken } = await createSession(user);
+    try {
+      //tokens for the Google user
+      const { access_token, refreshToken } = await createSession(user);
 
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "Strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-    return res.status(200).json(formatDataToSend(user, access_token));
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Strict",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+      return res.status(200).json(formatDataToSend(user, access_token));
+    } catch (tokenErr) {
+      if (isNewUser) {
+        await User.findByIdAndDelete(user._id);
+      }
+      throw tokenErr;
+    }
   } catch (err) {
     console.error(`[SECURITY-CRITICAL]: Google Auth Error: ${err.message}`);
     return res.status(500).json({ error: "Google authentication failed." });
@@ -348,7 +360,7 @@ export const linkGoogle = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // 🔥 CRITICAL CHECK
+    // CRITICAL CHECK
     if (decoded.email !== user.personal_info.email) {
       return res.status(403).json({
         error: "Google account email does not match",
@@ -411,5 +423,56 @@ export const refreshTokenHandler = async (req, res) => {
     return res.json({ access_token: newaccess_token });
   } catch (err) {
     return res.status(500).json({ error: "Server error" });
+  }
+};
+
+export const changePassword = async (req, res) => {
+  let { currentPassword, newPassword } = req.body;
+
+  let passwordRegex = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&])\S{8,20}$/;
+
+  if (
+    !passwordRegex.test(currentPassword) ||
+    !passwordRegex.test(newPassword)
+  ) {
+    return res.status(403).json({
+      error:
+        "Password should be 8 to 20 characters long with at least 1 numeric, 1 lowercase, 1 uppercase, and 1 special symbol",
+    });
+  }
+
+  try {
+    // req.user contains the user ID set by verifyJWT middleware
+    const user = await User.findById(req.user);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    if (user.google_auth) {
+      return res.status(403).json({
+        error:
+          "You cannot change account password because you logged in using Google",
+      });
+    }
+
+    const isMatch = await comparePassword(
+      user.personal_info.password,
+      currentPassword,
+    );
+
+    if (!isMatch) {
+      return res.status(403).json({ error: "Incorrect current password" });
+    }
+    const hashedPassword = await hashPassword(newPassword);
+
+    await User.findOneAndUpdate(
+      { _id: req.user },
+      { "personal_info.password": hashedPassword },
+    );
+    return res.status(200).json({ status: "Password updated successfully" });
+  } catch (err) {
+    console.error(err);
+    return res
+      .status(500)
+      .json({ error: "Some error occurred while updating password" });
   }
 };

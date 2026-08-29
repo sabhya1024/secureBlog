@@ -1,4 +1,4 @@
-import axios from "axios";
+import api from "./api";
 
 export const filterPaginationData = async ({
   create_new_arr = false,
@@ -7,8 +7,16 @@ export const filterPaginationData = async ({
   page,
   countRoute,
   data_to_send = {},
+  user = undefined,
 }) => {
   let obj;
+
+  let headers = {};
+  if (user) {
+    headers.headers = {
+      Authorization: `Bearer ${user}`,
+    };
+  }
 
   if (state !== null && !create_new_arr) {
     obj = { ...state, results: [...state.results, ...data], page: page };
@@ -16,9 +24,10 @@ export const filterPaginationData = async ({
     try {
       let {
         data: { totalDocs },
-      } = await axios.post(
+      } = await api.post(
         import.meta.env.VITE_BACKEND_URL + countRoute,
         data_to_send,
+        headers,
       );
 
       obj = { results: data, page: 1, totalDocs };
@@ -30,3 +39,4 @@ export const filterPaginationData = async ({
 
   return obj;
 };
+

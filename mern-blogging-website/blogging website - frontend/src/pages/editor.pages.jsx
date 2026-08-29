@@ -4,7 +4,7 @@ import { Navigate, useParams } from "react-router-dom";
 import BlogEditor from "../components/blog-editor.component";
 import PublishForm from "../components/publish-form.component";
 import Loader from "../components/loader.component";
-import axios from "axios";
+import api from "../common/api";
 
 const blogStructure = () => ({
   title: "",
@@ -36,7 +36,7 @@ const Editor = () => {
       try {
         const {
           data: { blog },
-        } = await axios.post(
+        } = await api.post(
           import.meta.env.VITE_BACKEND_URL + "/blog/get-blog",
           { blog_id, draft: true, mode: "edit" },
         );

@@ -4,7 +4,7 @@ import googleIcon from "../imgs/google.png";
 import { Link } from "react-router-dom";
 import AnimationWrapper from "../common/page-animation";
 import { toast, Toaster } from "react-hot-toast";
-import axios from "axios";
+import api from "../common/api";
 import { storeInSession } from "../common/session";
 import { UserContext } from "../App";
 import { Navigate } from "react-router-dom";
@@ -22,7 +22,7 @@ const UserAuthForm = ({ type }) => {
 
   const userAuthThroughServer = async (endpoint, formData) => {
     try {
-      const { data } = await axios.post(
+      const { data } = await api.post(
         import.meta.env.VITE_BACKEND_URL + endpoint,
         formData,
         { withCredentials: true },

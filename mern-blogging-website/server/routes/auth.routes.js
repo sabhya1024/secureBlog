@@ -7,6 +7,7 @@ import {
   refreshTokenHandler,
   setPassword,
   linkGoogle,
+  changePassword
 } from "../controllers/auth.Controller.js";
 import { verifyJWT } from "../middleware/verifyJWT.js";
 
@@ -17,6 +18,9 @@ router.post("/signin", signin);
 router.post("/google-auth", google_auth);
 router.post("/logout", logout);
 router.post("/refresh", refreshTokenHandler);
+
+
+router.post("/change-password", verifyJWT, changePassword);
 
 // optional
 router.post("/set-password", verifyJWT, setPassword);

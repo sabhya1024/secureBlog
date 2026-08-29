@@ -6,7 +6,7 @@ import BlogPostCard from "../components/blog-post.component";
 import AnimationWrapper from "../common/page-animation";
 import NoDataMessage from "../components/nodata.component";
 import LoadMoreDataBtn from "../components/load-more.component";
-import axios from "axios";
+import api from "../common/api";
 import { filterPaginationData } from "../common/filter-pagination-data";
 import UserCard from "../components/usercard.component";
 
@@ -17,7 +17,7 @@ const SearchPage = () => {
 
   const searchBlogs = async ({ page = 1, create_new_arr = false }) => {
     try {
-      const { data } = await axios.post(
+      const { data } = await api.post(
         import.meta.env.VITE_BACKEND_URL + "/blog/filter-blogs",
         { query, page },
       );
@@ -39,7 +39,7 @@ const SearchPage = () => {
     try {
       const {
         data: { users },
-      } = await axios.post(
+      } = await api.post(
         import.meta.env.VITE_BACKEND_URL + "/user/search-users",
         { query },
       );
@@ -98,7 +98,13 @@ const SearchPage = () => {
                     key={i}>
                     <BlogPostCard
                       content={blog}
-                      author={blog.author.personal_info}></BlogPostCard>
+                      author={
+                        blog.author?.personal_info || {
+                          fullname: "Deleted User",
+                          username: "unknown",
+                          profile_img: "https://api.dicebear.com/6.x/bottts/svg?seed=Unknown",
+                        }
+                      }></BlogPostCard>
                   </AnimationWrapper>
                 );
               })

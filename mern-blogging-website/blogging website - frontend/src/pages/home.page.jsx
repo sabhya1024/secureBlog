@@ -1,4 +1,4 @@
-import axios from "axios";
+import api from "../common/api";
 import AnimationWrapper from "../common/page-animation";
 import InPageNavigation from "../components/inpage-navigation.component";
 import { useEffect, useState } from "react";
@@ -19,7 +19,7 @@ const HomePage = () => {
 
   const fetchCategories = async () => {
     try {
-      let { data } = await axios.get(
+      let { data } = await api.get(
         import.meta.env.VITE_BACKEND_URL + "/blog/categories",
       );
       setCategories(data.categories);
@@ -35,7 +35,7 @@ const HomePage = () => {
 
       if (pageState !== "home") {
         // Fetching by Category Pill
-        let { data } = await axios.post(
+        let { data } = await api.post(
           import.meta.env.VITE_BACKEND_URL + "/blog/search-blogs",
           { tag: pageState, page },
         );
@@ -50,7 +50,7 @@ const HomePage = () => {
         setBlog(formatedData);
       } else {
         // Fetching main feed (with or without search/filters)
-        let { data } = await axios.post(
+        let { data } = await api.post(
           import.meta.env.VITE_BACKEND_URL + "/blog/filter-blogs",
           { query: searchQuery, filterBy: activeFilter, page },
         );
@@ -141,7 +141,13 @@ const HomePage = () => {
                         key={i}>
                         <BlogPostCard
                           content={blog}
-                          author={blog.author.personal_info}></BlogPostCard>
+                          author={
+                            blog.author?.personal_info || {
+                              fullname: "Deleted User",
+                              username: "unknown",
+                              profile_img: "https://api.dicebear.com/6.x/bottts/svg?seed=Unknown",
+                            }
+                          }></BlogPostCard>
                       </AnimationWrapper>
                     );
                   })

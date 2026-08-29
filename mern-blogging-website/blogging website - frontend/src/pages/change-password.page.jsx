@@ -2,7 +2,7 @@ import { useRef, useContext } from "react";
 import AnimationWrapper from "../common/page-animation";
 import InputBox from "../components/input.component";
 import { toast, Toaster } from "react-hot-toast";
-import axios from "axios";
+import api from "../common/api";
 import { UserContext } from "../App";
 
 const ChangePassword = () => {
@@ -55,7 +55,7 @@ const ChangePassword = () => {
     const loadingToast = toast.loading("Updating password...");
 
     try {
-      await axios.post(
+      await api.post(
         import.meta.env.VITE_BACKEND_URL + "/auth/change-password",
         formData,
         {

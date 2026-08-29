@@ -5,7 +5,7 @@ import { useState, useContext, useRef, useEffect } from "react";
 import defaultBanner from "../imgs/blog banner.png";
 import { UserContext } from "../App";
 import { EditorContext } from "../pages/editor.pages";
-import axios from "axios";
+import api from "../common/api";
 import { Toaster, toast } from "react-hot-toast";
 import EditorJS from "@editorjs/editorjs";
 import { tools } from "./tools.component";
@@ -74,7 +74,7 @@ const BlogEditor = () => {
         formData.append("file", file); // Appending file for busboy
 
         // Send directly to our secure backend proxy
-        const uploadRes = await axios.post(
+        const uploadRes = await api.post(
           `${import.meta.env.VITE_BACKEND_URL}/upload/image`,
           formData,
           {
@@ -173,7 +173,7 @@ const BlogEditor = () => {
         tags,
         draft: true,
       };
-      await axios.post(
+      await api.post(
         import.meta.env.VITE_BACKEND_URL + "/blog/create-blog",
         { ...blogObj, id: blog_id },
         { headers: { Authorization: `Bearer ${access_token}` } },
@@ -181,7 +181,7 @@ const BlogEditor = () => {
       e.target.classList.remove("disable");
       toast.dismiss(loadingToast);
       toast.success("Draft Saved");
-      setTimeout(() => navigate("/"), 500);
+      setTimeout(() => navigate("/dashboard/blogs?tab=draft"), 500);
     } catch (err) {
       e.target.classList.remove("disable");
       toast.dismiss(loadingToast);

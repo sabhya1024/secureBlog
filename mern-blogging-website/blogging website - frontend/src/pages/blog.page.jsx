@@ -1,4 +1,4 @@
-import axios from "axios";
+import api from "../common/api";
 import { createContext, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import AnimationWrapper from "../common/page-animation";
@@ -7,6 +7,9 @@ import { getDay } from "../common/date";
 import BlogInteraction from "../components/blog-interaction.component";
 import BlogPostCard from "../components/blog-post.component";
 import BlogContent from "../components/blog-content.component";
+import CommentsContainer, {
+  fetchComments,
+} from "../components/comments.component";
 
 export const blogStructure = {
   title: "",
@@ -26,31 +29,48 @@ const BlogPage = () => {
   const [similarBlogs, setSimilarBlogs] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isLikedByUser, setLikedByUser] = useState(false);
+  const [commentsWrapper, setCommentsWrapper] = useState(false);
+  const [totalParentCommentsLoaded, setTotalParentCommentsLoaded] = useState(0);
 
   let {
     title,
     content,
     banner,
-    author: {
-      personal_info: { fullname, username: author_username, profile_img },
-    },
+    author,
     publishedAt,
     tags,
   } = blog;
+
+  let {
+    fullname,
+    username: author_username,
+    profile_img,
+  } = author?.personal_info || {
+    fullname: "Deleted User",
+    username: "unknown",
+    profile_img: "https://api.dicebear.com/6.x/bottts/svg?seed=Unknown",
+  };
 
   const fetchBlog = async () => {
     try {
       const {
         data: { blog },
-      } = await axios.post(
+      } = await api.post(
         import.meta.env.VITE_BACKEND_URL + "/blog/get-blog",
         { blog_id },
       );
-      blog.comments = { results: [] };
+
+      const comments = await fetchComments({
+        blog_id: blog._id,
+        setParentCommentCountFun: setTotalParentCommentsLoaded,
+      });
+
+      blog.comments = comments;
       setBlog(blog);
+
       if (blog.tags?.length) {
         try {
-          const { data } = await axios.post(
+          const { data } = await api.post(
             import.meta.env.VITE_BACKEND_URL + "/blog/search-blogs",
             { tag: blog.tags[0], limit: 6, eliminate_blog: blog_id },
           );
@@ -70,6 +90,9 @@ const BlogPage = () => {
     setBlog(blogStructure);
     setSimilarBlogs(null);
     setLoading(true);
+    setLikedByUser(false);
+    setCommentsWrapper(false);
+    setTotalParentCommentsLoaded(0);
   };
 
   useEffect(() => {
@@ -83,7 +106,17 @@ const BlogPage = () => {
         <Loader />
       ) : (
         <BlogContext.Provider
-          value={{ blog, setBlog, isLikedByuser, setLikedByUser }}>
+          value={{
+            blog,
+            setBlog,
+            isLikedByUser,
+            setLikedByUser,
+            commentsWrapper,
+            setCommentsWrapper,
+            totalParentCommentsLoaded,
+            setTotalParentCommentsLoaded,
+          }}>
+          <CommentsContainer />
           <div className="max-w-[900px] center py-10 max-lg:px-[5vw]">
             <img src={banner} className="aspect-video w-full rounded" />
 
@@ -133,9 +166,11 @@ const BlogPage = () => {
                 </h1>
 
                 {similarBlogs.map((blog, i) => {
-                  let {
-                    author: { personal_info },
-                  } = blog;
+                  let personal_info = blog.author?.personal_info || {
+                    fullname: "Deleted User",
+                    username: "unknown",
+                    profile_img: "https://api.dicebear.com/6.x/bottts/svg?seed=Unknown",
+                  };
 
                   return (
                     <AnimationWrapper

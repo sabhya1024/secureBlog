@@ -11,7 +11,12 @@ import {
   searchBlogs,
   searchBlogsCount,
   likeBlog,
-  isLikedByUser
+  isLikedByUser,
+  addComment,
+  getBlogComments,
+  getReplies,
+  deleteComment,
+  deleteBlog,
 } from "../controllers/blog.Controller.js";
 import { verifyJWT } from "../middleware/verifyJWT.js";
 
@@ -30,4 +35,10 @@ router.post("/get-blog", getBlog);
 router.post("/is-liked-by-user", verifyJWT, isLikedByUser);
 
 router.post("/like-blog", verifyJWT, likeBlog);
+router.post("/add-comment", verifyJWT, addComment);
+router.post("/get-blog-comments", getBlogComments);
+router.post("/get-replies", getReplies);
+router.post("/delete-comment", verifyJWT, deleteComment);
+router.post("/delete-blog", verifyJWT, deleteBlog);
+
 export default router;

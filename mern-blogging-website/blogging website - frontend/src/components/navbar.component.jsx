@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, useContext } from "react";
 import logo from "../imgs/logo.png";
 import { Link, Navigate, Outlet, useNavigate } from "react-router-dom";
-import { useContext } from "react";
 import { UserContext } from "../App";
 // import { useNavigate } from "react-router-dom";
 import UserNavigationPanel from "./user-navigation.component";
+import api from "../common/api";
 
 const Navbar = () => {
   const [searchBoxVisibility, setSearchBoxVisibility] = useState(false);
@@ -12,9 +12,32 @@ const Navbar = () => {
 
   let navigate = useNavigate();
 
-  const { userAuth } = useContext(UserContext);
-  const access_token = userAuth?.access_token;
+  const { userAuth, setUserAuth } = useContext(UserContext);
+  const { access_token, new_notification_available } = userAuth || {};
   const profile_img = userAuth?.user?.profile_img || userAuth?.profile_img;
+
+  useEffect(() => {
+    if (access_token) {
+      const fetchNewNotification = async () => {
+        try {
+          const { data } = await api.get(
+            import.meta.env.VITE_BACKEND_URL + "/user/new-notification",
+            {
+              headers: {
+                Authorization: `Bearer ${access_token}`,
+              },
+            }
+          );
+          setUserAuth((prev) => ({ ...prev, ...data }));
+        } catch (err) {
+          console.log(err);
+        }
+      };
+
+      fetchNewNotification();
+    }
+  }, [access_token]);
+
 
   const handleUserNavPanel = () => {
     setUserNavPanel((currentVal) => !currentVal);
@@ -73,6 +96,11 @@ const Navbar = () => {
               <Link to="/dashboard/notifications">
                 <button className="w-12 h-12 rounded-full bg-grey relative hover:bg-black/10">
                   <i className="fi fi-rr-bell text-2xl block mt-1"></i>
+                  {new_notification_available ? (
+                    <span className="bg-red w-3 h-3 rounded-full absolute z-10 top-2 right-2"></span>
+                  ) : (
+                    ""
+                  )}
                 </button>
               </Link>
 

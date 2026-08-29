@@ -1,6 +1,7 @@
 import Blog from "../models/Blog.js";
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
+import Comment from "../models/Comment.js";
 
 export const createBlog = async (req, res) => {
   let authorId = req.user;
@@ -50,7 +51,7 @@ export const createBlog = async (req, res) => {
   tags = Array.isArray(tags)
     ? tags.map((tag) => String(tag).toLowerCase())
     : [];
-  
+
   let blog_id =
     id ||
     title
@@ -87,7 +88,6 @@ export const createBlog = async (req, res) => {
       });
       await blog.save();
 
-
       let incremental = draft ? 0 : 1;
       await User.findOneAndUpdate(
         { _id: authorId },
@@ -98,8 +98,7 @@ export const createBlog = async (req, res) => {
       );
       return res.status(200).json({ id: blog.blog_id });
     }
-  }
-  catch (err) {
+  } catch (err) {
     console.error(
       `User ${authorId} failed to create/update blog: ${err.message}`,
     );
@@ -137,6 +136,27 @@ export const searchBlogsByCategoryCount = async (req, res) => {
     let { tag } = req.body;
     const count = await Blog.countDocuments({ tags: tag, draft: false });
     return res.status(200).json({ totalDocs: count });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export const latestBlogs = async (req, res) => {
+  let { page = 1 } = req.body;
+  let maxLimit = 5;
+
+  try {
+    const blogs = await Blog.find({ draft: false })
+      .populate(
+        "author",
+        "personal_info.profile_img personal_info.username personal_info.fullname -_id",
+      )
+      .sort({ publishedAt: -1 })
+      .select("blog_id title des banner activity tags publishedAt -_id")
+      .skip((page - 1) * maxLimit)
+      .limit(maxLimit);
+
+    return res.status(200).json({ blogs });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -241,7 +261,7 @@ export const countLatestBlogs = async (req, res) => {
 export const searchBlogs = async (req, res) => {
   try {
     let { tag, query, author, page, limit, eliminate_blog } = req.body;
-    let findQuery;
+    let findQuery = { draft: false };
 
     if (tag) {
       findQuery = { tags: tag, draft: false };
@@ -288,7 +308,7 @@ export const searchBlogsCount = async (req, res) => {
   }
 
   try {
-    const count = Blog.countDocuments(findQuery);
+    const count = await Blog.countDocuments(findQuery);
     return res.status(200).json({ totalDocs: count });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -382,6 +402,222 @@ export const isLikedByUser = async (req, res) => {
       blog: _id,
     });
     return res.status(200).json({ result });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export const addComment = async (req, res) => {
+  const user_id = req.user;
+  const { _id, comment, blog_author, replying_to, notification_id } = req.body;
+
+  if (!comment || !comment.trim().length) {
+    return res
+      .status(403)
+      .json({ error: "Write something to leave a comment" });
+  }
+
+  try {
+    const commentObj = {
+      blog_id: _id,
+      blog_author,
+      comment: comment.trim(),
+      commented_by: user_id,
+    };
+
+    if (replying_to) {
+      commentObj.parent = replying_to;
+      commentObj.isReply = true;
+    }
+
+    const newComment = await new Comment(commentObj).save();
+
+    await Blog.findOneAndUpdate(
+      { _id },
+      {
+        $push: { comments: newComment._id },
+        $inc: {
+          "activity.total_comments": 1,
+          "activity.total_parent_comments": replying_to ? 0 : 1,
+        },
+      },
+    );
+
+    let notificationObj = {
+      type: replying_to ? "reply" : "comment",
+      blog: _id,
+      notification_for: blog_author,
+      user: user_id,
+      comment: newComment._id,
+    };
+
+    if (replying_to) {
+      notificationObj.replied_on_comment = replying_to;
+
+      const replyingToCommentDoc = await Comment.findOneAndUpdate(
+        { _id: replying_to },
+        { $push: { children: newComment._id } },
+      );
+
+      if (replyingToCommentDoc) {
+        notificationObj.notification_for = replyingToCommentDoc.commented_by;
+      }
+    }
+
+    await new Notification(notificationObj).save();
+
+    if (notification_id) {
+      await Notification.findOneAndUpdate(
+        { _id: notification_id },
+        { reply: newComment._id },
+      );
+    }
+
+    const populatedComment = await Comment.findById(newComment._id).populate(
+      "commented_by",
+      "personal_info.fullname personal_info.username personal_info.profile_img",
+    );
+
+    return res.status(200).json(populatedComment);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export const getBlogComments = async (req, res) => {
+  const { blog_id, skip = 0 } = req.body;
+  const maxLimit = 5;
+
+  try {
+    const comments = await Comment.find({ blog_id, isReply: false })
+      .populate(
+        "commented_by",
+        "personal_info.fullname personal_info.username personal_info.profile_img",
+      )
+      .skip(skip)
+      .limit(maxLimit)
+      .sort({ commentedAt: -1 });
+
+    return res.status(200).json({ comments });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export const getReplies = async (req, res) => {
+  const { _id, skip = 0 } = req.body;
+  const maxLimit = 5;
+
+  try {
+    const doc = await Comment.findOne({ _id })
+      .populate({
+        path: "children",
+        options: {
+          limit: maxLimit,
+          skip: skip,
+          sort: { commentedAt: 1 },
+        },
+        populate: {
+          path: "commented_by",
+          select:
+            "personal_info.profile_img personal_info.fullname personal_info.username",
+        },
+      })
+      .select("children");
+
+    return res.status(200).json({ replies: doc ? doc.children : [] });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+const deleteCommentsRecursive = async (_id) => {
+  const comment = await Comment.findOne({ _id });
+
+  if (comment) {
+    if (comment.children && comment.children.length) {
+      for (const childId of comment.children) {
+        await deleteCommentsRecursive(childId);
+      }
+    }
+
+    await Notification.findOneAndDelete({ comment: _id });
+    await Notification.findOneAndUpdate(
+      { reply: _id },
+      { $unset: { reply: 1 } },
+    );
+
+    await Blog.findOneAndUpdate(
+      { _id: comment.blog_id },
+      {
+        $pull: { comments: _id },
+        $inc: {
+          "activity.total_comments": -1,
+          "activity.total_parent_comments": comment.parent ? 0 : -1,
+        },
+      },
+    );
+
+    if (comment.parent) {
+      await Comment.findOneAndUpdate(
+        { _id: comment.parent },
+        { $pull: { children: _id } },
+      );
+    }
+
+    await Comment.findOneAndDelete({ _id });
+  }
+};
+
+export const deleteComment = async (req, res) => {
+  const user_id = req.user;
+  const { _id } = req.body;
+
+  try {
+    const comment = await Comment.findById(_id);
+
+    if (!comment) {
+      return res.status(404).json({ error: "Comment not found" });
+    }
+
+    if (
+      user_id === comment.commented_by.toString() ||
+      user_id === comment.blog_author.toString()
+    ) {
+      await deleteCommentsRecursive(_id);
+      return res.status(200).json({ status: "done" });
+    } else {
+      return res
+        .status(403)
+        .json({ error: "You do not have permission to delete this comment" });
+    }
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export const deleteBlog = async (req, res) => {
+  let user_id = req.user;
+  let { blog_id } = req.body;
+
+  try {
+    const deletedBlog = await Blog.findOneAndDelete({ blog_id });
+    if (!deletedBlog) {
+      return res.status(404).json({ error: "Blog not found" });
+    }
+
+    await Notification.deleteMany({ blog: deletedBlog._id });
+    await Comment.deleteMany({ blog_id: deletedBlog._id });
+
+    await User.findOneAndUpdate(
+      { _id: user_id },
+      { 
+        $pull: { blogs: deletedBlog._id }, 
+        $inc: { "account_info.total_posts": -1 }
+      }
+    );
+
+    return res.status(200).json({ status: "done" });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

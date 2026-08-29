@@ -25,6 +25,8 @@
     "@editorjs/raw": "^2.5.1",
     "@flaticon/flaticon-uicons": "^2.2.0",
     "axios": "^1.13.6",
+    "baseline-browser-mapping": "^2.11.20",
+    "caniuse-lite": "^1.0.30001810",
     "firebase": "^10.14.1",
     "framer-motion": "^10.13.0",
     "react": "^18.2.0",

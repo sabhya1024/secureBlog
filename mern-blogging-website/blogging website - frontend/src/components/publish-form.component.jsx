@@ -3,7 +3,7 @@ import { toast, Toaster } from "react-hot-toast";
 import { useContext } from "react";
 import { EditorContext } from "../pages/editor.pages";
 import Tag from "./tags.component";
-import axios from "axios";
+import api from "../common/api";
 import { UserContext } from "../App";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -43,7 +43,7 @@ const handleKeyDown = (e) => {
     }
   };
 
-const handlePublish = (e) => {
+const handlePublish = async (e) => {
     if (e.target.classList.contains("disable")) {
       return;
   }
@@ -71,7 +71,7 @@ const handlePublish = (e) => {
       draft: false,
     };
 
-     await axios.post(
+     await api.post(
         import.meta.env.VITE_BACKEND_URL + "/blog/create-blog",
         { ...blogObj, id: blog_id },
         { headers: { Authorization: `Bearer ${access_token}` } },
@@ -81,7 +81,7 @@ const handlePublish = (e) => {
       toast.dismiss(loadingToast);
       toast.success("Blog Published Successfully!");
       setTimeout(() => {
-        navigate("/");
+        navigate("/dashboard/blogs");
       }, 500);
   
   }
