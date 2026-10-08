@@ -63,8 +63,8 @@ export const createBlog = async (req, res) => {
 
   try {
     if (id) {
-      await Blog.findOneAndUpdate(
-        { blog_id },
+      const updatedBlog = await Blog.findOneAndUpdate(
+        { blog_id, author: authorId },
         {
           title,
           des: description,
@@ -73,7 +73,18 @@ export const createBlog = async (req, res) => {
           tags,
           draft: Boolean(draft),
         },
+        { new: true },
       );
+
+      if (!updatedBlog) {
+        console.warn(
+          `[${new Date().toISOString()}] [SECURITY] User ${authorId} attempted to edit blog ${blog_id} they do not own`,
+        );
+        return res
+          .status(403)
+          .json({ error: "You do not have permission to edit this blog" });
+      }
+
       return res.status(200).json({ id: blog_id });
     } else {
       let blog = new Blog({
@@ -601,18 +612,33 @@ export const deleteBlog = async (req, res) => {
   let { blog_id } = req.body;
 
   try {
-    const deletedBlog = await Blog.findOneAndDelete({ blog_id });
-    if (!deletedBlog) {
+    // First, find the blog to verify ownership
+    const blog = await Blog.findOne({ blog_id });
+
+    if (!blog) {
       return res.status(404).json({ error: "Blog not found" });
     }
 
-    await Notification.deleteMany({ blog: deletedBlog._id });
-    await Comment.deleteMany({ blog_id: deletedBlog._id });
+    // Verify the authenticated user is the blog's author
+    if (blog.author.toString() !== user_id) {
+      console.warn(
+        `[${new Date().toISOString()}] [SECURITY] User ${user_id} attempted to delete blog ${blog_id} owned by ${blog.author}`,
+      );
+      return res
+        .status(403)
+        .json({ error: "You do not have permission to delete this blog" });
+    }
+
+    // Authorized — proceed with deletion
+    await Blog.findOneAndDelete({ _id: blog._id });
+
+    await Notification.deleteMany({ blog: blog._id });
+    await Comment.deleteMany({ blog_id: blog._id });
 
     await User.findOneAndUpdate(
       { _id: user_id },
       { 
-        $pull: { blogs: deletedBlog._id }, 
+        $pull: { blogs: blog._id }, 
         $inc: { "account_info.total_posts": -1 }
       }
     );
