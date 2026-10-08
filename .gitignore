@@ -4,3 +4,5 @@ node_modules/
 dist/
 .dist/
 mern-blogging-website/*.md
+*.txt
+fetch_transcript.py

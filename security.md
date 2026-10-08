@@ -1,33 +1,60 @@
-# Security Measures and Defenses
+<h1>Security Architecture (OWASP Top 10 Mitigation)</h1>
+<hr>
 
-The Secure MERN Blog Platform incorporates standard security practices, strictly adhering to the latest OWASP Top 10 (2025) guidelines to mitigate common web vulnerabilities.
+<p>The Secure MERN Blog Platform is engineered with a proactive, defense-in-depth security mindset. This document maps our comprehensive security implementations directly against the <strong>OWASP Top 10 (2021)</strong> vulnerabilities, demonstrating exactly how each attack vector is neutralized across our stack.</p>
 
-## 1. Authentication and Credential Management (OWASP A04:2025, A07:2025)
-- **Password Hashing:** Passwords are hashed using Argon2id with appropriate memory and time cost parameters to defend against Cryptographic Failures (A04).
-- **Session Isolation:** Short-lived access tokens (15 minutes) are kept in memory. Long-lived refresh tokens are stored in HttpOnly, Secure, SameSite=Strict cookies to mitigate XSS and CSRF risks, directly addressing Authentication Failures (A07).
-- **Token Rotation & Revocation:** Tokens are tracked in Redis (hashed with SHA-256) to support dynamic revocation and immediate session invalidation.
-- **OAuth Merging:** Google OAuth login utilizes the Firebase Admin SDK on the backend to verify the ID token securely before merging accounts.
+<h2>Fully Mitigated Attack Vectors</h2>
 
-## 2. Brute Force & DoS Protection (OWASP A06:2025)
-- **Account Lockouts:** The authentication controller actively monitors login attempts. Five failed attempts trigger an automatic 15-minute account lockout to prevent brute force attacks, a core component of mitigating Insecure Design (A06).
-- **Rate Limiting:** Critical endpoints (`/signin`, `/signup`) are protected by a Tiered Rate Limiter (20 requests per 15 minutes).
-- **Payload Validation:** Strict backend validation ensures payload fields (like `title` or `tags`) match expected types (Strings/Arrays) before processing, preventing Denial of Service attacks via type manipulation.
+<h3>1. A01: Broken Access Control</h3>
+<ul>
+  <li><strong>verifyJWT Middleware Authorization:</strong> Every protected API route requires cryptographic verification of the JWT signature. The middleware validates the token and securely attaches the validated user ID to the request, ensuring users can never manipulate content they do not own.</li>
+  <li><strong>Non-Sequential Identifiers:</strong> Blog URLs and usernames utilize <code>nanoid</code> for generation. These cryptographically secure, non-guessable IDs prevent automated enumeration and Insecure Direct Object Reference (IDOR) attacks.</li>
+  <li><strong>Role-Based Access Control (RBAC):</strong> Granular permissions distinguish standard users from administrators.</li>
+</ul>
 
-## 3. Injection & Data Integrity (OWASP A05:2025)
-- **Input Sanitization:** User input is sanitized using `validator.escape()`. Emails undergo `validator.normalizeEmail()` to neutralize Injection (A05) payloads.
-- **NoSQL Injection Prevention:** The application strictly relies on Mongoose schemas to prevent MongoDB operators (like `$gt`) from being injected into string fields.
-- **Data Minimization:** API endpoints limit database exposure by only returning required fields via Mongoose projections.
+<h3>2. A02: Cryptographic Failures</h3>
+<ul>
+  <li><strong>Argon2id Cryptography:</strong> User passwords are cryptographically hashed using Argon2id with finely tuned parameters (12MB memory cost, 3 iterations, 1 degree of parallelism). This provides robust, memory-hard resistance against modern GPU brute-force and dictionary attacks.</li>
+</ul>
 
-## 4. Social Links & URL Parsing (OWASP A05:2025)
-- **Machine-Level URL Parsing:** The `/api/user/update-profile` endpoint passes all user-submitted social links through Node's native cryptographic URL parser.
-- **Protocol Whitelisting:** The parser extracts the protocol and strictly enforces `http:` or `https:`, blocking payloads like `javascript:` or `vbscript:` to neutralize Stored XSS injection attacks (A05).
-- **Domain Whitelisting:** A domain dictionary enforces strict hostnames for social platforms (e.g., YouTube links must end in `youtube.com` or `youtu.be`).
+<h3>3. A03: Injection (XSS & NoSQL)</h3>
+<ul>
+  <li><strong>Strict Input Sanitization (XSS):</strong> All user-submitted content (names, bios, comments) is actively sanitized using the <code>validator</code> library. HTML characters are converted to harmless entities, neutralizing Stored XSS attacks.</li>
+  <li><strong>HttpOnly Cookie Isolation (XSS):</strong> Refresh tokens are stored exclusively in <code>HttpOnly</code> cookies, denying client-side JavaScript access and eliminating the risk of XSS-based token theft.</li>
+  <li><strong>Social Media Link Whitelisting:</strong> Malicious URI protocols such as <code>javascript:</code> or <code>data:</code> are explicitly blocked during profile updates.</li>
+  <li><strong>NoSQL Injection Mitigation:</strong> MongoDB queries rely on strictly typed Mongoose schemas, preventing attackers from injecting arbitrary query operators like <code>$gt</code> or <code>$ne</code>.</li>
+</ul>
 
-## 5. File Upload Security (OWASP A06:2025)
-- **Magic-Bytes & Stream Validation:** File uploads are validated at the binary level using magic-bytes checking rather than relying on user-provided file extensions, mitigating severe Insecure Design flaws (A06).
-- **Signed Uploads:** Uploads are limited to 5MB, strictly typed (JPEG/PNG/WebP), and cryptographically signed by the backend before interacting with the Cloudinary CDN.
+<h3>4. A04: Insecure Design</h3>
+<ul>
+  <li><strong>Magic Byte File Sniffing (Stream Validator):</strong> File uploads are intercepted at the stream level using <code>busboy</code> and <code>file-type</code>. The server inspects the raw magic bytes of the file stream to prevent malicious extension spoofing (e.g., PHP scripts renamed to .png). If a spoof is detected, the server immediately destroys the socket (<code>req.destroy()</code>).</li>
+  <li><strong>Rate Limiting & Abuse Prevention:</strong> Critical endpoints such as <code>/signin</code> and <code>/signup</code> utilize rate-limiting to prevent automated spam and resource exhaustion.</li>
+</ul>
 
-## 6. Access Control and Server Hardening (OWASP A01:2025, A02:2025)
-- **Granular Authorization:** The `verifyJWT` middleware protects sensitive routes. The author ID is extracted directly from the verified JWT payload instead of trusting user-provided data, preventing Broken Access Control (A01).
-- **Security Headers:** Helmet middleware is used to inject standard security headers (X-Frame-Options, HSTS, CSP) and remove fingerprinting headers to avoid Security Misconfiguration (A02).
-- **Environment Protection:** CORS policies restrict API access to the designated frontend URL. The database connection logic initiates an immediate process exit on failure to prevent ghost server execution.
+<h3>5. A07: Identification and Authentication Failures</h3>
+<ul>
+  <li><strong>Redis-Backed Token Revocation:</strong> Logouts aren't just client-side deletions. Refresh tokens are hashed and tracked in an in-memory Redis blacklist. If an attacker attempts to reuse a compromised or outdated refresh token, the server actively denies the request (preventing replay attacks).</li>
+  <li><strong>Dual-Token Architecture:</strong> Authentication relies on short-lived Access JWTs for authorization and long-lived Refresh JWTs for session continuity.</li>
+  <li><strong>Progressive Account Lockout:</strong> To thwart credential stuffing, the platform tracks consecutive failed login attempts. After 5 failed attempts, the account is temporarily locked for 15 minutes.</li>
+  <li><strong>Hybrid Authentication:</strong> The application securely merges Email/Password accounts with Google OAuth, strictly validating Firebase JWT tokens before merging.</li>
+</ul>
+
+<h3>6. A08: Software and Data Integrity Failures</h3>
+<ul>
+  <li><strong>Cascading Deletions:</strong> The platform implements safe, recursive data purging. When a user deletes their account, the backend securely deletes all authored blogs, nested comments, and notifications across all collections, preventing orphaned records and database corruption.</li>
+  <li><strong>Client-Side Defensive Rendering:</strong> The React frontend utilizes optional chaining and default fallbacks when dealing with populated database references. If a referenced entity is deleted, the UI gracefully renders a "Deleted User" state rather than crashing.</li>
+</ul>
+
+<h2>Partially Mitigated / Active Areas of Work</h2>
+
+<h3>7. A09: Security Logging and Monitoring Failures</h3>
+<ul>
+  <li><strong>Current State:</strong> The system actively logs <code>[SECURITY-CRITICAL]</code> events (such as spoofed file uploads and authentication failures) to the server console.</li>
+  <li><strong>Future Roadmap:</strong> We will transition these console logs to a centralized, persistent monitoring tool (like Datadog, Winston, or AWS CloudWatch) to ensure audit trails survive server restarts and trigger real-time developer alerts.</li>
+</ul>
+
+<h3>8. A05: Security Misconfiguration</h3>
+<ul>
+  <li><strong>Current State:</strong> Express server responses are hardened using <code>Helmet</code> middleware, which strips revealing headers like <code>X-Powered-By</code> and enforces strict Content Security Policies (CSP).</li>
+  <li><strong>Future Roadmap:</strong> Ensuring production environments strictly enforce <code>NODE_ENV=production</code> to suppress verbose Express error stack traces from inadvertently reaching end-users.</li>
+</ul>

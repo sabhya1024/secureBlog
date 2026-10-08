@@ -1,1 +1,0 @@
-# Purpose: Contains the logic for your routes (e.g., auth logic, blog logic).

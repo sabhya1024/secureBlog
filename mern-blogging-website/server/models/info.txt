@@ -1,1 +1,0 @@
-# Purpose: Contains your Mongoose Schemas (User.js, Blog.js).

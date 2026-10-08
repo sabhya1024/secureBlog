@@ -1,1 +1,0 @@
-# Purpose: Stores functions that run before controllers, like JWT verification and Multer.

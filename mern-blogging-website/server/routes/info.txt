@@ -1,1 +1,0 @@
-# Purpose: Defines your API endpoints and links them to the correct controllers.
