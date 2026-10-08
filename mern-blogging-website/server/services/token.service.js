@@ -26,9 +26,8 @@ export const createSession = async (user) => {
 };
 
 export const rotateRefreshToken = async (oldToken, user) => {
-  try {
-    verifyRefreshToken(oldToken);
-  } catch (err) {
+  const decoded = verifyRefreshToken(oldToken);
+  if (!decoded) {
     throw new Error("INVALID_TOKEN");
   }
 

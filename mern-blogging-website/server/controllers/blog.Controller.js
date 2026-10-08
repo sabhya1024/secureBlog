@@ -327,7 +327,7 @@ export const searchBlogsCount = async (req, res) => {
 };
 
 export const getBlog = async (req, res) => {
-  let { blog_id, draft, mode } = req.body;
+  let { blog_id, mode } = req.body;
 
   let incrementVal = mode !== "edit" ? 1 : 0;
 
@@ -345,8 +345,26 @@ export const getBlog = async (req, res) => {
       return res.status(404).json({ error: "Blog not found" });
     }
 
-    if (blog.draft && !draft) {
-      return res.status(403).json({ error: "You cannot access draft blog" });
+    // If blog is a draft, only the author can view it
+    if (blog.draft) {
+      // Check for auth token
+      const authHeader = req.headers["authorization"];
+      const token = authHeader && authHeader.split(" ")[1];
+
+      if (!token) {
+        return res.status(403).json({ error: "You cannot access draft blog" });
+      }
+
+      // Verify the token and check ownership
+      const jwt = await import("jsonwebtoken");
+      try {
+        const decoded = jwt.default.verify(token, process.env.ACCESS_TOKEN_SECRET);
+        if (decoded.id !== blog.author._id.toString()) {
+          return res.status(403).json({ error: "You cannot access draft blog" });
+        }
+      } catch {
+        return res.status(403).json({ error: "You cannot access draft blog" });
+      }
     }
 
     if (blog.author?.personal_info?.username) {
