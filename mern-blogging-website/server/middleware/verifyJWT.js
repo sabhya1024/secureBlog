@@ -10,7 +10,7 @@ export const verifyJWT = (req, res, next) => {
   }
 
   // Verify against the short-lived (15m) Access Token secret
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, { algorithms: ["HS256"] }, (err, decoded) => {
     if (err) {
       // 401 + Code allows React to trigger a silent Refresh Token rotation
       if (err.name === "TokenExpiredError") {

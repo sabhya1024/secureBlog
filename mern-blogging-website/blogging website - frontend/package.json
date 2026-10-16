@@ -27,6 +27,7 @@
     "axios": "^1.13.6",
     "baseline-browser-mapping": "^2.11.20",
     "caniuse-lite": "^1.0.30001810",
+    "dompurify": "^3.4.17",
     "firebase": "^13.0.0",
     "framer-motion": "^10.13.0",
     "react": "^18.2.0",

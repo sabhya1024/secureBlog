@@ -51,8 +51,8 @@ const Navbar = () => {
 
   const handleSearchFun = (e) => {
     let query = e.target.value;
-    if (e.keyCode == 13 && query.length) {
-      navigate(`/search/${query}`);
+    if (e.keyCode == 13 && query.trim().length) {
+      navigate(`/search/${encodeURIComponent(query.trim())}`);
     }
   };
 

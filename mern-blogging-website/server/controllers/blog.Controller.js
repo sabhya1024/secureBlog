@@ -2,6 +2,7 @@ import Blog from "../models/Blog.js";
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 import Comment from "../models/Comment.js";
+import { escapeRegex } from "../utils/escapeRegex.js";
 
 export const createBlog = async (req, res) => {
   let authorId = req.user;
@@ -122,9 +123,12 @@ export const createBlog = async (req, res) => {
 export const searchBlogsByCategory = async (req, res) => {
   try {
     let { tag, page = 1, eliminate_blog, limit } = req.body;
-    let maxLimit = limit ? limit : 5;
+    if (!tag || typeof tag !== "string") {
+      return res.status(200).json({ blogs: [] });
+    }
+    let maxLimit = limit ? Number(limit) : 5;
     let findQuery = { tags: tag, draft: false };
-    if (eliminate_blog) {
+    if (eliminate_blog && typeof eliminate_blog === "string") {
       findQuery.blog_id = { $ne: eliminate_blog };
     }
     const blogs = await Blog.find(findQuery)
@@ -134,21 +138,24 @@ export const searchBlogsByCategory = async (req, res) => {
       )
       .sort({ publishedAt: -1 })
       .select("blog_id title des banner activity tags publishedAt -_id")
-      .skip((page - 1) * maxLimit)
+      .skip((Math.max(1, Number(page)) - 1) * maxLimit)
       .limit(maxLimit);
     return res.status(200).json({ blogs });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Failed to search blogs by category" });
   }
 };
 
 export const searchBlogsByCategoryCount = async (req, res) => {
   try {
     let { tag } = req.body;
+    if (!tag || typeof tag !== "string") {
+      return res.status(200).json({ totalDocs: 0 });
+    }
     const count = await Blog.countDocuments({ tags: tag, draft: false });
     return res.status(200).json({ totalDocs: count });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Failed to count blogs by category" });
   }
 };
 
@@ -240,13 +247,14 @@ export const getFilteredBlogsCount = async (req, res) => {
   let { query, filterBy } = req.body;
   let findQuery = { draft: false };
 
-  if (query) {
+  if (query && typeof query === "string") {
     if (filterBy === "most relevant") {
       findQuery.$text = { $search: query };
     } else {
+      const sanitized = escapeRegex(query);
       findQuery.$or = [
-        { title: new RegExp(query, "i") },
-        { tags: new RegExp(query, "i") },
+        { title: new RegExp(sanitized, "i") },
+        { tags: new RegExp(sanitized, "i") },
       ];
     }
   }
@@ -255,7 +263,7 @@ export const getFilteredBlogsCount = async (req, res) => {
     const count = await Blog.countDocuments(findQuery);
     return res.status(200).json({ totalDocs: count });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Failed to count filtered blogs" });
   }
 };
 
@@ -264,8 +272,8 @@ export const countLatestBlogs = async (req, res) => {
     let count = await Blog.countDocuments({ draft: false });
     return res.status(200).json({ totalDocs: count });
   } catch (error) {
-    console.log(error.message);
-    return res.status(500).json({ error: error });
+    console.error("countLatestBlogs Error:", error.message || error);
+    return res.status(500).json({ error: "Failed to count latest blogs" });
   }
 };
 
@@ -274,19 +282,19 @@ export const searchBlogs = async (req, res) => {
     let { tag, query, author, page, limit, eliminate_blog } = req.body;
     let findQuery = { draft: false };
 
-    if (tag) {
+    if (tag && typeof tag === "string") {
       findQuery = { tags: tag, draft: false };
-    } else if (query) {
-      findQuery = { draft: false, title: new RegExp(query, "i") };
-    } else if (author) {
+    } else if (query && typeof query === "string") {
+      findQuery = { draft: false, title: new RegExp(escapeRegex(query), "i") };
+    } else if (author && typeof author === "string") {
       findQuery = { author, draft: false };
     }
 
-    if (eliminate_blog) {
+    if (eliminate_blog && typeof eliminate_blog === "string") {
       findQuery.blog_id = { $ne: eliminate_blog };
     }
 
-    let maxLimit = limit ? limit : 5;
+    let maxLimit = limit ? Number(limit) : 5;
 
     const blogs = await Blog.find(findQuery)
       .populate(
@@ -295,12 +303,12 @@ export const searchBlogs = async (req, res) => {
       )
       .sort({ publishedAt: -1 })
       .select("blog_id title des banner activity tags publishedAt -_id")
-      .skip((page - 1) * maxLimit)
+      .skip((Math.max(1, Number(page || 1)) - 1) * maxLimit)
       .limit(maxLimit);
     return res.status(200).json({ blogs });
   } catch (error) {
     console.error(
-      `[${new Date().toISOString()}] [ERROR] searchBlogs failed: ${error.message}`,
+      `[${new Date().toISOString()}] [ERROR] searchBlogs failed: ${error.message || error}`,
     );
     return res.status(500).json({ error: "Internal server error" });
   }
@@ -308,13 +316,13 @@ export const searchBlogs = async (req, res) => {
 
 export const searchBlogsCount = async (req, res) => {
   let { tag, query, author } = req.body;
-  let findQuery;
+  let findQuery = { draft: false };
 
-  if (tag) {
+  if (tag && typeof tag === "string") {
     findQuery = { tags: tag, draft: false };
-  } else if (query) {
-    findQuery = { draft: false, title: new RegExp(query, "i") };
-  } else if (author) {
+  } else if (query && typeof query === "string") {
+    findQuery = { draft: false, title: new RegExp(escapeRegex(query), "i") };
+  } else if (author && typeof author === "string") {
     findQuery = { author, draft: false };
   }
 
@@ -322,12 +330,16 @@ export const searchBlogsCount = async (req, res) => {
     const count = await Blog.countDocuments(findQuery);
     return res.status(200).json({ totalDocs: count });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Failed to count search blogs" });
   }
 };
 
 export const getBlog = async (req, res) => {
   let { blog_id, mode } = req.body;
+
+  if (!blog_id || typeof blog_id !== "string") {
+    return res.status(400).json({ error: "Invalid blog ID" });
+  }
 
   let incrementVal = mode !== "edit" ? 1 : 0;
 
@@ -358,7 +370,9 @@ export const getBlog = async (req, res) => {
       // Verify the token and check ownership
       const jwt = await import("jsonwebtoken");
       try {
-        const decoded = jwt.default.verify(token, process.env.ACCESS_TOKEN_SECRET);
+        const decoded = jwt.default.verify(token, process.env.ACCESS_TOKEN_SECRET, {
+          algorithms: ["HS256"],
+        });
         if (decoded.id !== blog.author._id.toString()) {
           return res.status(403).json({ error: "You cannot access draft blog" });
         }
@@ -375,81 +389,101 @@ export const getBlog = async (req, res) => {
     }
     return res.status(200).json({ blog });
   } catch (err) {
-    return res.status(500).json({ err: err.message });
+    return res.status(500).json({ error: "Failed to load blog" });
   }
 };
 
 export const likeBlog = async (req, res) => {
   let user_id = req.user;
-  let { _id, likedByUser } = req.body;
+  let { _id } = req.body;
 
-  let incrementVal = !likedByUser ? 1 : -1;
+  if (!_id || typeof _id !== "string") {
+    return res.status(400).json({ error: "Invalid blog ID" });
+  }
 
   try {
-    const blog = await Blog.findOneAndUpdate(
-      { _id },
-      { $inc: { "activity.total_likes": incrementVal } },
-      { new: true },
-    );
+    const existingLike = await Notification.findOne({
+      type: "like",
+      blog: _id,
+      user: user_id,
+    });
 
-    if (!blog) {
-      return res.status(404).json({ error: "Blog not found" });
-    }
+    if (!existingLike) {
+      const blog = await Blog.findOneAndUpdate(
+        { _id },
+        { $inc: { "activity.total_likes": 1 } },
+        { new: true },
+      );
 
-    if (!likedByUser) {
-      let likeCompleted = new Notification({
+      if (!blog) {
+        return res.status(404).json({ error: "Blog not found" });
+      }
+
+      await new Notification({
         type: "like",
         blog: _id,
         notification_for: blog.author,
         user: user_id,
-      });
+      }).save();
 
-      await likeCompleted.save();
       return res.status(200).json({ liked_by_user: true });
     } else {
-      await Notification.findOneAndDelete({
-        user: user_id,
-        blog: _id,
-        type: "like",
-      });
+      await Blog.findOneAndUpdate(
+        { _id },
+        { $inc: { "activity.total_likes": -1 } },
+      );
+      await Notification.findOneAndDelete({ _id: existingLike._id });
       return res.status(200).json({ liked_by_user: false });
     }
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Failed to update like status" });
   }
 };
 
 export const isLikedByUser = async (req, res) => {
   try {
     let user_id = req.user;
-
     let { _id } = req.body;
+
+    if (!_id || typeof _id !== "string") {
+      return res.status(400).json({ error: "Invalid blog ID" });
+    }
 
     const result = await Notification.exists({
       user: user_id,
       type: "like",
       blog: _id,
     });
-    return res.status(200).json({ result });
+    return res.status(200).json({ result: Boolean(result) });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Failed to check like status" });
   }
 };
 
 export const addComment = async (req, res) => {
   const user_id = req.user;
-  const { _id, comment, blog_author, replying_to, notification_id } = req.body;
+  const { _id, comment, replying_to, notification_id } = req.body;
 
-  if (!comment || !comment.trim().length) {
+  if (!comment || typeof comment !== "string" || !comment.trim().length) {
     return res
       .status(403)
       .json({ error: "Write something to leave a comment" });
   }
 
+  if (!_id || typeof _id !== "string") {
+    return res.status(400).json({ error: "Invalid blog ID" });
+  }
+
   try {
+    const blog = await Blog.findById(_id).select("author");
+    if (!blog) {
+      return res.status(404).json({ error: "Blog not found" });
+    }
+    const authenticBlogAuthor = blog.author;
+
     const commentObj = {
       blog_id: _id,
-      blog_author,
+      blog_author: authenticBlogAuthor,
       comment: comment.trim(),
       commented_by: user_id,
     };
@@ -475,7 +509,7 @@ export const addComment = async (req, res) => {
     let notificationObj = {
       type: replying_to ? "reply" : "comment",
       blog: _id,
-      notification_for: blog_author,
+      notification_for: authenticBlogAuthor,
       user: user_id,
       comment: newComment._id,
     };
@@ -509,7 +543,7 @@ export const addComment = async (req, res) => {
 
     return res.status(200).json(populatedComment);
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Failed to add comment" });
   }
 };
 

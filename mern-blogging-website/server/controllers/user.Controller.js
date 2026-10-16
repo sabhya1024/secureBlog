@@ -2,11 +2,15 @@ import User from "../models/User.js";
 import Blog from "../models/Blog.js";
 import Notification from "../models/Notification.js";
 import Comment from "../models/Comment.js";
+import { escapeRegex } from "../utils/escapeRegex.js";
 
 export const searchUsers = async (req, res) => {
   try {
     let { query } = req.body;
-    const escapedQuery = (query || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (typeof query !== "string") {
+      return res.status(200).json({ users: [] });
+    }
+    const escapedQuery = escapeRegex(query);
     const users = await User.find({
       "personal_info.username": new RegExp(escapedQuery, "i"),
     })
@@ -16,23 +20,26 @@ export const searchUsers = async (req, res) => {
       );
     return res.status(200).json({ users });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Failed to search users" });
   }
 };
 
 export const getUserProfile = async (req, res) => {
   try {
     let { username } = req.body;
+    if (!username || typeof username !== "string") {
+      return res.status(400).json({ error: "Valid username is required" });
+    }
     const user = await User.findOne({
       "personal_info.username": username,
-    }).select("-personal_info.password -google_auth -updatedAt -blogs");
+    }).select("personal_info.fullname personal_info.username personal_info.profile_img personal_info.bio social_links account_info joinedAt -_id");
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
     return res.status(200).json(user);
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: error.message });
+    console.error("getUserProfile Error:", error.message || error);
+    return res.status(500).json({ error: "Failed to fetch user profile" });
   }
 };
 
@@ -78,7 +85,7 @@ export const updateProfile = async (req, res) => {
         let domains = allowedDomains[platform];
         if (domains && domains.length > 0) {
           let isValidDomain = domains.some((domain) =>
-            parsed.hostname.endsWith(domain),
+            parsed.hostname === domain || parsed.hostname.endsWith("." + domain),
           );
           if (!isValidDomain) {
             return res.status(403).json({
@@ -110,25 +117,30 @@ export const updateProfile = async (req, res) => {
     if (err.code == 11000) {
       return res.status(409).json({ error: "Username is already taken" });
     }
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Failed to update profile" });
   }
 };
 
 export const updateProfileImg = async (req, res) => {
   let { url } = req.body;
 
-  if (!url) {
-    return res.status(400).json({ error: "Image URL is required" });
+  if (!url || typeof url !== "string") {
+    return res.status(400).json({ error: "A valid image URL is required" });
   }
 
   try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return res.status(400).json({ error: "Only HTTP and HTTPS URLs are permitted" });
+    }
+
     await User.findOneAndUpdate(
       { _id: req.user },
-      { "personal_info.profile_img": url },
+      { "personal_info.profile_img": parsed.href },
     );
-    return res.status(200).json({ profile_img: url });
+    return res.status(200).json({ profile_img: parsed.href });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Failed to update profile image" });
   }
 };
 

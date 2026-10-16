@@ -49,16 +49,42 @@ router.get("/get-upload-signature", verifyJWT, (req, res) => {
 router.post("/upload-by-url", verifyJWT, async (req, res) => {
   try {
     const { url } = req.body;
-    // Cloudinary will automatically download the image from 
-    // the user's URL, verify it, and securely upload it to your Cloudinary account.
-    const result = await cloudinary.uploader.upload(url, {
+    if (!url || typeof url !== "string") {
+      return res.status(400).json({ error: "A valid URL string is required" });
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return res.status(400).json({ error: "Invalid URL format" });
+    }
+
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return res.status(400).json({ error: "Only HTTP and HTTPS URLs are allowed" });
+    }
+
+    const hostname = parsed.hostname.toLowerCase();
+    const blockedHosts = ["localhost", "127.0.0.1", "::1", "169.254.169.254", "0.0.0.0"];
+    const isPrivateIp = 
+      hostname.startsWith("10.") ||
+      hostname.startsWith("192.168.") ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) ||
+      hostname.endsWith(".local") ||
+      hostname.endsWith(".internal");
+
+    if (blockedHosts.includes(hostname) || isPrivateIp) {
+      return res.status(400).json({ error: "Access to private or internal network addresses is forbidden" });
+    }
+
+    const result = await cloudinary.uploader.upload(parsed.href, {
       upload_preset: "blog_website_banner",
     });
 
     // Return the safe Cloudinary URL
     return res.status(200).json({ secure_url: result.secure_url });
   } catch (error) {
-    console.error("URL Upload Error:", error);
+    console.error("URL Upload Error:", error.message || error);
     return res.status(500).json({ error: "Failed to upload image from URL" });
   }
 });

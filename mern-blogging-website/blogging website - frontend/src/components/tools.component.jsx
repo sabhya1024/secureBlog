@@ -8,32 +8,28 @@ import Image from "@editorjs/image";
 import InlineCode from "@editorjs/inline-code";
 import Raw from "@editorjs/raw";
 import Checklist from "@editorjs/checklist";
-
 import axios from "axios";
-import { lookInSession } from "../common/session";
+
+import api from "../common/api";
 
 const UploadImageByUrl = async (e) => {
   try {
-    // Grab your access token. (Adjust this based on where you save it on login!)
-    // e.g., let userInSession = JSON.parse(sessionStorage.getItem("user"));
-    let userInSession = lookInSession("user");
-    let token = userInSession ? userInSession.access_token : null;
+    if (!e || typeof e !== "string") {
+      throw new Error("Invalid URL");
+    }
 
-    const res = await axios.post(
-      `${import.meta.env.VITE_BACKEND_URL}/upload/upload-by-url`,
-      { url: e },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    );
+    const parsed = new URL(e);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error("Only HTTP and HTTPS URLs are permitted");
+    }
+
+    const res = await api.post("/upload/upload-by-url", { url: parsed.href });
     return {
       success: 1,
       file: { url: res.data.secure_url },
     };
   } catch (error) {
-    console.error("Proxy upload failed", error);
+    console.error("Proxy upload failed", error.message || error);
     return {
       success: 0,
       file: { url: "" },
@@ -43,20 +39,8 @@ const UploadImageByUrl = async (e) => {
 
 const UploadImageByFile = async (e) => {
   try {
-    // 1. Get the access token from session storage
-    let userInSession = lookInSession("user");
-    let token = userInSession ? userInSession.access_token : null;
-
-    // 2. Ask your backend for the secure Cloudinary signature
-    const signatureRes = await axios.get(
-      `${import.meta.env.VITE_BACKEND_URL}/upload/get-upload-signature`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "X-Content-Type-Options": "nosniff",
-        },
-      },
-    );
+    // 1. Ask backend for the secure Cloudinary signature using configured api client
+    const signatureRes = await api.get("/upload/get-upload-signature");
     const signatureData = signatureRes.data;
 
     const formData = new FormData();
@@ -66,7 +50,7 @@ const UploadImageByFile = async (e) => {
     formData.append("api_key", signatureData.api_key);
     formData.append("upload_preset", signatureData.upload_preset);
 
-    // 4. Post the image directly to Cloudinary
+    // 2. Post the image directly to Cloudinary
     const cloudinaryRes = await axios.post(
       `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`,
       formData,
@@ -77,8 +61,7 @@ const UploadImageByFile = async (e) => {
       file: { url: cloudinaryRes.data.secure_url },
     };
   } catch (error) {
-    console.error("Local file upload failed:", error);
-    //editorjs failed
+    console.error("Local file upload failed:", error.message || error);
     return {
       success: 0,
       file: { url: "" },

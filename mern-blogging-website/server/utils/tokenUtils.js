@@ -18,7 +18,9 @@ export const generateRefreshToken = (userId) => {
 
 export const verifyRefreshToken = (token) => {
   try {
-    return jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
+    return jwt.verify(token, process.env.REFRESH_TOKEN_SECRET, {
+      algorithms: ["HS256"],
+    });
   } catch (err) {
     return null;
   }

@@ -3,19 +3,27 @@ import AnimationWrapper from "../common/page-animation";
 import { Link } from "react-router-dom";
 import { UserContext } from "../App";
 import { removeFromSession } from "../common/session";
+import api from "../common/api";
 
 const UserNavigationPanel = () => {
   const { userAuth, setUserAuth } = useContext(UserContext);
   const username = userAuth?.user?.username || userAuth?.username;
 
-  const signOutUser = () => {
-    removeFromSession("user");
-    setUserAuth({
-      access_token: null,
-      profile_img: null,
-      username: null,
-    });
+  const signOutUser = async () => {
+    try {
+      await api.post("/auth/logout", {}, { withCredentials: true });
+    } catch (err) {
+      console.warn("Backend logout notification failed:", err.message);
+    } finally {
+      removeFromSession("user");
+      setUserAuth({
+        access_token: null,
+        profile_img: null,
+        username: null,
+      });
+    }
   };
+
   return (
     <div>
       <AnimationWrapper

@@ -17,6 +17,19 @@ let emailRegex =
   /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/;
 let passwordRegex = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&])\S{8,20}$/;
 
+const getRefreshTokenCookieOptions = () => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  path: "/",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+});
+
+const maskEmail = (email) => {
+  if (!email || typeof email !== "string") return "";
+  return email.replace(/^(.)(.*)(@.*)$/, (_, a, b, c) => a + "*".repeat(Math.min(b.length, 5)) + c);
+};
+
 const generateUsername = async () => {
   let username = `user_${nanoid(8)}`;
   let isUsernameNotUnique = await User.exists({
@@ -103,7 +116,7 @@ export const signup = async (req, res) => {
 
     await user.save();
     console.info("User created", {
-      email,
+      email: maskEmail(email),
       ip: req.ip,
     });
 
@@ -112,12 +125,7 @@ export const signup = async (req, res) => {
       const { access_token, refreshToken } = await createSession(user);
 
       // 7. Send Refresh Token in a "Locked" HttpOnly Cookie
-      res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production", // Only sent over HTTPS
-        sameSite: "Strict", // Blocks CSRF
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      });
+      res.cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions());
 
       // 8. Send Access Token + User Info (Exclude password!)
       return res.status(201).json(formatDataToSend(user, access_token));
@@ -202,17 +210,12 @@ export const signin = async (req, res) => {
     //   generating tokens
     const { access_token, refreshToken } = await createSession(user);
 
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "Strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions());
 
     return res.status(200).json(formatDataToSend(user, access_token));
   } catch (error) {
     console.warn("Failed login attempt", {
-      email,
+      email: maskEmail(email),
       ip: req.ip,
       time: new Date(),
     });
@@ -267,12 +270,7 @@ export const google_auth = async (req, res) => {
       //tokens for the Google user
       const { access_token, refreshToken } = await createSession(user);
 
-      res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "Strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
+      res.cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions());
       return res.status(200).json(formatDataToSend(user, access_token));
     } catch (tokenErr) {
       if (isNewUser) {
@@ -295,7 +293,12 @@ export const logout = async (req, res) => {
       await redisClient.del(hashedToken);
     }
 
-    res.clearCookie("refreshToken");
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      path: "/",
+    });
 
     return res.status(200).json({
       status: "success",
@@ -413,12 +416,7 @@ export const refreshTokenHandler = async (req, res) => {
       user,
     );
 
-    res.cookie("refreshToken", newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "Strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie("refreshToken", newRefreshToken, getRefreshTokenCookieOptions());
 
     return res.json({ access_token: newaccess_token });
   } catch (err) {
