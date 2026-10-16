@@ -8,6 +8,7 @@ import { EditorContext } from "../pages/editor.pages";
 import api from "../common/api";
 import { Toaster, toast } from "react-hot-toast";
 import EditorJS from "@editorjs/editorjs";
+import Undo from "editorjs-undo";
 import { tools } from "./tools.component";
 
 const BlogEditor = () => {
@@ -22,18 +23,84 @@ const BlogEditor = () => {
   } = useContext(EditorContext);
 
   let navigate = useNavigate();
+  const undoRef = useRef(null);
 
   useEffect(() => {
     if (!textEditor.isReady) {
-      setTextEditor(
-        new EditorJS({
-          holder: "textEditor",
-          data: Array.isArray(content) ? content[0] : content,
-          tools: tools,
-          placeholder: "Let's begin writing! ",
-        }),
-      );
+      const editorData = Array.isArray(content) ? content[0] : content;
+      const editor = new EditorJS({
+        holder: "textEditor",
+        data: editorData,
+        tools: tools,
+        placeholder: "Let's begin writing! ",
+        onReady: () => {
+          try {
+            const undo = new Undo({
+              editor,
+              maxLength: 50,
+              config: {
+                debounceTimer: 200,
+                shortcuts: {
+                  undo: "CMD+Z",
+                  redo: "CMD+Y",
+                },
+              },
+            });
+            if (
+              editorData &&
+              (editorData.blocks?.length || Object.keys(editorData).length > 0)
+            ) {
+              undo.initialize(editorData);
+            }
+            undoRef.current = undo;
+          } catch (err) {
+            console.error("Failed to initialize Undo plugin:", err);
+          }
+        },
+      });
+
+      setTextEditor(editor);
     }
+  }, []);
+
+  const handleUndo = () => {
+    if (undoRef.current && typeof undoRef.current.undo === "function") {
+      undoRef.current.undo();
+    }
+  };
+
+  const handleRedo = () => {
+    if (undoRef.current && typeof undoRef.current.redo === "function") {
+      undoRef.current.redo();
+    }
+  };
+
+  useEffect(() => {
+    const handleGlobalShortcuts = (e) => {
+      // Allow native textarea/input behavior for title
+      if (
+        document.activeElement?.tagName === "INPUT" ||
+        document.activeElement?.tagName === "TEXTAREA"
+      ) {
+        return;
+      }
+
+      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+      const isCmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+      if (isCmdOrCtrl) {
+        if (e.key === "z" && e.shiftKey) {
+          e.preventDefault();
+          handleRedo();
+        } else if (e.key === "Z" && e.shiftKey) {
+          e.preventDefault();
+          handleRedo();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalShortcuts);
+    return () => window.removeEventListener("keydown", handleGlobalShortcuts);
   }, []);
 
   //check if user is loggedin
@@ -201,7 +268,30 @@ const BlogEditor = () => {
           {title?.length ? title : "New Blog"}
         </p>
 
-        <div className="flex gap-4 ml-auto">
+        <div className="flex gap-3 ml-auto items-center">
+          <div className="flex items-center gap-1 bg-grey/70 p-1 rounded-full mr-1">
+            <button
+              type="button"
+              className="w-8 h-8 rounded-full hover:bg-white flex items-center justify-center text-dark-grey hover:text-black transition shadow-sm hover:shadow active:scale-95"
+              title="Undo (Ctrl+Z)"
+              onClick={handleUndo}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="w-8 h-8 rounded-full hover:bg-white flex items-center justify-center text-dark-grey hover:text-black transition shadow-sm hover:shadow active:scale-95"
+              title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
+              onClick={handleRedo}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3" />
+              </svg>
+            </button>
+          </div>
+
           <button className="btn-light py-2" onClick={handleSaveDraft}>
             Save Draft
           </button>
