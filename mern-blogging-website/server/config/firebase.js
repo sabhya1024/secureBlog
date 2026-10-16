@@ -1,4 +1,4 @@
-import admin from "firebase-admin";
+import { initializeApp, cert, getApps } from "firebase-admin/app";
 
 /**
  * Load Firebase service account credentials from FIREBASE_SERVICE_ACCOUNT_KEY env var.
@@ -26,8 +26,8 @@ try {
     const serviceAccountKey = loadServiceAccountKey();
 
     if (serviceAccountKey) {
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccountKey),
+        initializeApp({
+            credential: cert(serviceAccountKey),
         });
 
         console.info(
@@ -35,7 +35,7 @@ try {
         );
     } else {
         // Initialize without credentials — auth-dependent features will be unavailable
-        admin.initializeApp();
+        initializeApp();
         console.warn(
             `[${new Date().toISOString()}] [AUTH-MONITOR]: Firebase Admin initialized WITHOUT service-account credentials. ` +
             `Authentication features may not work.`,
@@ -48,4 +48,5 @@ try {
     console.error(`Reason: ${err.message}`);
 }
 
-export default admin;
+const defaultApp = getApps()[0] || null;
+export default defaultApp;
