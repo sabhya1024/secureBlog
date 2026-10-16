@@ -52,7 +52,11 @@ server.use((req, res, next) => {
   next();
 });
 
-server.use(helmet());
+server.use(
+  helmet({
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+  }),
+);
 server.use(cookieParser());
 server.use(globalLimiter);
 
@@ -77,14 +81,15 @@ server.use(
   }),
 );
 
-server.get("/api/health", (req, res) => {
+server.get(["/api/health", "/health"], (req, res) => {
   res.status(200).json({ status: "healthy", timestamp: new Date().toISOString() });
 });
 
-server.use("/api/auth", authLimiter, authRoutes);
-server.use("/api/upload", uploadLimiter, uploadRoutes);
-server.use("/api/blog", blogRoutes);
-server.use("/api/user", userRoutes);
+// Support both /api/* and /* routes so requests without /api prefix never 404
+server.use(["/api/auth", "/auth"], authLimiter, authRoutes);
+server.use(["/api/upload", "/upload"], uploadLimiter, uploadRoutes);
+server.use(["/api/blog", "/blog"], blogRoutes);
+server.use(["/api/user", "/user"], userRoutes);
 
 try {
   await connectDB();
