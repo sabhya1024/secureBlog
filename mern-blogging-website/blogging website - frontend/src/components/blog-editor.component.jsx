@@ -33,6 +33,7 @@ const BlogEditor = () => {
         data: editorData,
         tools: tools,
         placeholder: "Let's begin writing! ",
+        logLevel: "ERROR",
         onReady: () => {
           try {
             const undo = new Undo({
