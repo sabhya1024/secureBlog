@@ -16,6 +16,7 @@ import crypto from "crypto";
 import {
   sendWelcomeEmail,
   sendPasswordResetEmail,
+  sendVerificationEmail,
 } from "../utils/emailService.js";
 
 let emailRegex =
@@ -109,7 +110,14 @@ export const signup = async (req, res) => {
     // 4. unique username is required
     const username = await generateUsername();
 
-    // 5. Save User to MongoDB
+    // 5. Generate email verification token
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(verificationToken)
+      .digest("hex");
+
+    // 6. Save User to MongoDB with isVerified: false
     const user = new User({
       personal_info: {
         fullname,
@@ -117,33 +125,29 @@ export const signup = async (req, res) => {
         password: hashedPassword,
         username,
       },
+      isVerified: false,
+      verificationToken: hashedToken,
+      verificationExpires: Date.now() + 24 * 3600 * 1000, // 24 hours
     });
 
     await user.save();
-    console.info("User created", {
+    console.info("User registered (pending verification)", {
       email: maskEmail(email),
       ip: req.ip,
     });
 
-    try {
-      // 6. Generate Tokens
-      const { access_token, refreshToken } = await createSession(user);
+    // 7. Send verification email asynchronously (non-blocking)
+    sendVerificationEmail(email, fullname, verificationToken).catch((e) =>
+      console.error("[EMAIL-ERROR]: Failed to send verification email:", e.message)
+    );
 
-      // 7. Send Refresh Token in a "Locked" HttpOnly Cookie
-      res.cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions());
-
-      // Send welcome email asynchronously (non-blocking)
-      sendWelcomeEmail(email, fullname).catch((e) =>
-        console.error("[EMAIL-ERROR]: Failed to send welcome email:", e.message)
-      );
-
-      // 8. Send Access Token + User Info (Exclude password!)
-      return res.status(201).json(formatDataToSend(user, access_token));
-    } catch (tokenErr) {
-      // ROLLBACK: If token generation fails (e.g. Redis error), delete the user so they aren't left in a broken state
-      await User.findByIdAndDelete(user._id);
-      throw tokenErr; // Pass to the outer catch block to return a 500 error
-    }
+    // 8. Return success response requesting email confirmation
+    return res.status(201).json({
+      message:
+        "Account created! Please check your email and click the verification link to activate your account.",
+      requireVerification: true,
+      email,
+    });
   } catch (err) {
     console.error(`[SECURITY-CRITICAL]: Signup Error: ${err.message}`);
     return res
@@ -217,6 +221,33 @@ export const signin = async (req, res) => {
     user.lockUntil = null;
     await user.save();
 
+    // Enforce email verification (Google users are pre-verified)
+    if (!user.isVerified && !user.google_auth) {
+      const verificationToken = crypto.randomBytes(32).toString("hex");
+      const hashedToken = crypto
+        .createHash("sha256")
+        .update(verificationToken)
+        .digest("hex");
+
+      user.verificationToken = hashedToken;
+      user.verificationExpires = Date.now() + 24 * 3600 * 1000;
+      await user.save();
+
+      sendVerificationEmail(
+        email,
+        user.personal_info.fullname,
+        verificationToken
+      ).catch((e) =>
+        console.error("[EMAIL-ERROR]: Failed to resend verification email:", e.message)
+      );
+
+      return res.status(403).json({
+        error:
+          "Your email address is not verified yet. A new verification link has been sent to your inbox.",
+        unverified: true,
+      });
+    }
+
     //   generating tokens
     const { access_token, refreshToken } = await createSession(user);
 
@@ -270,6 +301,7 @@ export const google_auth = async (req, res) => {
           // no password beacuse of googleauth
         },
         google_auth: true,
+        isVerified: true, // Google verifies email ownership
       });
 
       await user.save();
@@ -622,5 +654,111 @@ export const resetPassword = async (req, res) => {
     return res
       .status(500)
       .json({ error: "An unexpected error occurred. Please try again later." });
+  }
+};
+
+/**
+ * Verifies user email via the token received in verification email
+ */
+export const verifyEmail = async (req, res) => {
+  let { token } = req.body;
+  const rawToken = token || req.query.token;
+
+  try {
+    if (!rawToken) {
+      return res.status(400).json({ error: "Verification token is required." });
+    }
+
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(rawToken)
+      .digest("hex");
+
+    const user = await User.findOne({
+      verificationToken: hashedToken,
+      verificationExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        error:
+          "Verification link is invalid or has expired. Please sign in to receive a new link.",
+      });
+    }
+
+    user.isVerified = true;
+    user.verificationToken = null;
+    user.verificationExpires = null;
+    await user.save();
+
+    // Send welcome email once verified!
+    sendWelcomeEmail(user.personal_info.email, user.personal_info.fullname).catch(
+      (e) => console.error("[EMAIL-ERROR]: Failed to send welcome email:", e.message)
+    );
+
+    return res.status(200).json({
+      message: "Email verified successfully! You can now log in and start uploading blogs.",
+      verified: true,
+    });
+  } catch (err) {
+    console.error("[SECURITY-CRITICAL] Verify email error:", err.message);
+    return res
+      .status(500)
+      .json({ error: "An unexpected error occurred during email verification." });
+  }
+};
+
+/**
+ * Resends verification email for unverified accounts
+ */
+export const resendVerification = async (req, res) => {
+  let { email } = req.body;
+  try {
+    if (!email) {
+      return res.status(400).json({ error: "Email is required." });
+    }
+
+    email = email.toLowerCase().trim();
+    email = validator.normalizeEmail(email);
+
+    const user = await User.findOne({ "personal_info.email": email });
+    if (!user) {
+      // Prevent user enumeration
+      return res.status(200).json({
+        message:
+          "If an unverified account with that email exists, a verification link has been sent.",
+      });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({
+        error: "This email is already verified. You can log in directly.",
+      });
+    }
+
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(verificationToken)
+      .digest("hex");
+
+    user.verificationToken = hashedToken;
+    user.verificationExpires = Date.now() + 24 * 3600 * 1000;
+    await user.save();
+
+    sendVerificationEmail(
+      email,
+      user.personal_info.fullname,
+      verificationToken
+    ).catch((e) =>
+      console.error("[EMAIL-ERROR]: Failed to resend verification:", e.message)
+    );
+
+    return res.status(200).json({
+      message: "A new verification link has been sent to your email address.",
+    });
+  } catch (err) {
+    console.error("[SECURITY-CRITICAL] Resend verification error:", err.message);
+    return res.status(500).json({ error: "Failed to resend verification email." });
   }
 };

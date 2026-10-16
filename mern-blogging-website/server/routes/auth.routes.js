@@ -10,6 +10,8 @@ import {
   changePassword,
   forgotPassword,
   resetPassword,
+  verifyEmail,
+  resendVerification,
 } from "../controllers/auth.Controller.js";
 import { verifyJWT } from "../middleware/verifyJWT.js";
 
@@ -22,6 +24,8 @@ router.post("/logout", logout);
 router.post("/refresh", refreshTokenHandler);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
+router.post("/verify-email", verifyEmail);
+router.post("/resend-verification", resendVerification);
 
 
 router.post("/change-password", verifyJWT, changePassword);

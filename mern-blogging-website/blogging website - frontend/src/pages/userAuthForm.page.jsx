@@ -1,5 +1,5 @@
 import InputBox from "../components/input.component";
-import React, { useContext } from "react";
+import React, { useContext, useState } from "react";
 import googleIcon from "../imgs/google.png";
 import { Link } from "react-router-dom";
 import AnimationWrapper from "../common/page-animation";
@@ -15,6 +15,9 @@ let emailRegex =
 let passwordRegex = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&])\S{8,20}$/;
 
 const UserAuthForm = ({ type }) => {
+  const [verificationRequired, setVerificationRequired] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState("");
+
   let {
     userAuth: { access_token },
     setUserAuth,
@@ -27,6 +30,14 @@ const UserAuthForm = ({ type }) => {
         formData,
         { withCredentials: true },
       );
+
+      if (data?.requireVerification) {
+        setVerificationRequired(true);
+        setRegisteredEmail(data.email || formData.email);
+        toast.success(data.message || "Please verify your email.");
+        return;
+      }
+
       storeInSession("user", data);
       setUserAuth(data);
     } catch (err) {
@@ -103,13 +114,30 @@ const UserAuthForm = ({ type }) => {
         <AnimationWrapper keyValue={type}>
           <section className="h-cover flex items-center justify-center">
             <Toaster />
-            <form
-              id="formElement"
-              onSubmit={handleSubmit}
-              className="w-[80%] max-w-[400px]">
-              <h1 className="text-4xl font-gelasio capitalize text-center mb-24">
-                {type === "signin" ? "Welcome back " : "Create new Account. "}
-              </h1>
+            {verificationRequired ? (
+              <div className="w-[85%] max-w-[420px] bg-grey p-8 rounded-xl text-center">
+                <i className="fi fi-rr-envelope-check text-5xl text-emerald-500 block mb-4"></i>
+                <h1 className="text-3xl font-gelasio capitalize text-center mb-3">
+                  Check your email
+                </h1>
+                <p className="text-dark-grey text-sm mb-4 leading-relaxed">
+                  We've sent a verification link to <strong className="text-black">{registeredEmail}</strong>.
+                </p>
+                <p className="text-dark-grey text-xs mb-6">
+                  Please click the link in your email to verify account ownership. Once verified, you can sign in and start uploading blogs immediately!
+                </p>
+                <Link to="/signin" className="btn-dark center block w-full">
+                  Go to Sign In
+                </Link>
+              </div>
+            ) : (
+              <form
+                id="formElement"
+                onSubmit={handleSubmit}
+                className="w-[80%] max-w-[400px]">
+                <h1 className="text-4xl font-gelasio capitalize text-center mb-24">
+                  {type === "signin" ? "Welcome back " : "Create new Account. "}
+                </h1>
 
               {type !== "signin" ? (
                 <InputBox
@@ -183,6 +211,7 @@ const UserAuthForm = ({ type }) => {
                 </p>
               )}
             </form>
+          )}
           </section>
         </AnimationWrapper>
       )}

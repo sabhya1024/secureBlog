@@ -110,3 +110,54 @@ export const sendPasswordResetEmail = async (to, name, resetToken) => {
     console.error(`[EMAIL-ERROR]: Failed to send password reset email to ${to}:`, error.message);
   }
 };
+
+/**
+ * Send email verification link to newly registered users
+ */
+export const sendVerificationEmail = async (to, name, verificationToken) => {
+  const transport = getTransporter();
+  if (!transport) {
+    console.warn(
+      `[EMAIL-WARN]: Verification email not sent to ${to} (credentials missing). Token: ${verificationToken}`
+    );
+    return;
+  }
+
+  const clientUrl = process.env.FRONTEND_URL || "https://hackcheck-liard.vercel.app";
+  const verifyUrl = `${clientUrl}/verify-email?token=${verificationToken}`;
+
+  const mailOptions = {
+    from: `"CheckHack" <${process.env.EMAIL_USER}>`,
+    to,
+    subject: "Verify Your Email Address - CheckHack",
+    html: `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0f172a; color: #e2e8f0; border-radius: 12px; overflow: hidden; border: 1px solid #1e293b;">
+        <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 32px; text-align: center;">
+          <h1 style="margin: 0; color: #fff; font-size: 28px; letter-spacing: 1px;">CheckHack</h1>
+        </div>
+        <div style="padding: 32px;">
+          <h2 style="color: #34d399; margin-top: 0;">Verify Your Email Address</h2>
+          <p style="font-size: 16px; line-height: 1.6;">Hello <strong>${name}</strong>,</p>
+          <p style="font-size: 16px; line-height: 1.6;">Thank you for registering on CheckHack. To confirm that you own this email address and protect our community, please click the button below to verify your account:</p>
+          <div style="text-align: center; margin: 32px 0;">
+            <a href="${verifyUrl}" style="background: linear-gradient(135deg, #10b981, #059669); color: #fff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Verify Email Address</a>
+          </div>
+          <p style="color: #94a3b8; font-size: 14px;">This verification link will expire in <strong>24 hours</strong>.</p>
+          <p style="color: #94a3b8; font-size: 14px;">Once verified, your account is immediately active—you can log in and start uploading your blogs right away without any waiting or admin approval!</p>
+          <p style="color: #94a3b8; font-size: 14px;">If you didn't create an account on CheckHack, you can safely ignore this email.</p>
+          <hr style="border: none; border-top: 1px solid #334155; margin: 24px 0;" />
+          <p style="color: #64748b; font-size: 12px;">If the button doesn't work, copy and paste this link into your browser:</p>
+          <p style="color: #34d399; font-size: 12px; word-break: break-all;">${verifyUrl}</p>
+        </div>
+      </div>
+    `,
+  };
+
+  try {
+    await transport.sendMail(mailOptions);
+    console.info(`[EMAIL]: Verification email sent successfully to ${to}`);
+  } catch (error) {
+    console.error(`[EMAIL-ERROR]: Failed to send verification email to ${to}:`, error.message);
+  }
+};
+

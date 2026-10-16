@@ -17,6 +17,7 @@ import ChangePassword from "./pages/change-password.page";
 import EditProfile from "./pages/edit-profile.page";
 import ForgotPassword from "./pages/forgot-password.page";
 import ResetPassword from "./pages/reset-password.page";
+import VerifyEmail from "./pages/verify-email.page";
 import api from "./common/api";
 
 export const UserContext = createContext({});
@@ -90,6 +91,7 @@ const App = () => {
           <Route path="signup" element={<UserAuthForm type="signup" />}></Route>
           <Route path="forgot-password" element={<ForgotPassword />} />
           <Route path="reset-password" element={<ResetPassword />} />
+          <Route path="verify-email" element={<VerifyEmail />} />
           <Route path="search/:query" element={<SearchPage />} />
           <Route path="user/:id" element={<ProfilePage />} />
           <Route path="blog/:blog_id" element={<BlogPage />} />
