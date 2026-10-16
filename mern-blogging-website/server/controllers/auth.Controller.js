@@ -12,6 +12,11 @@ import { hashToken } from "../utils/hashToken.js";
 
 import validator from "validator";
 import redisClient from "../utils/redisClient.js";
+import crypto from "crypto";
+import {
+  sendWelcomeEmail,
+  sendPasswordResetEmail,
+} from "../utils/emailService.js";
 
 let emailRegex =
   /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/;
@@ -126,6 +131,11 @@ export const signup = async (req, res) => {
 
       // 7. Send Refresh Token in a "Locked" HttpOnly Cookie
       res.cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions());
+
+      // Send welcome email asynchronously (non-blocking)
+      sendWelcomeEmail(email, fullname).catch((e) =>
+        console.error("[EMAIL-ERROR]: Failed to send welcome email:", e.message)
+      );
 
       // 8. Send Access Token + User Info (Exclude password!)
       return res.status(201).json(formatDataToSend(user, access_token));
@@ -271,6 +281,13 @@ export const google_auth = async (req, res) => {
       const { access_token, refreshToken } = await createSession(user);
 
       res.cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions());
+
+      if (isNewUser) {
+        sendWelcomeEmail(email, name).catch((e) =>
+          console.error("[EMAIL-ERROR]: Failed to send welcome email:", e.message)
+        );
+      }
+
       return res.status(200).json(formatDataToSend(user, access_token));
     } catch (tokenErr) {
       if (isNewUser) {
@@ -472,5 +489,138 @@ export const changePassword = async (req, res) => {
     return res
       .status(500)
       .json({ error: "Some error occurred while updating password" });
+  }
+};
+
+/**
+ * Initiates the password reset process by generating a cryptographically secure token,
+ * saving the SHA-256 hash to the database, and emailing the reset link.
+ */
+export const forgotPassword = async (req, res) => {
+  let { email } = req.body;
+  try {
+    if (!email) {
+      return res.status(400).json({ error: "Email is required." });
+    }
+
+    email = email.toLowerCase().trim();
+    email = validator.normalizeEmail(email);
+
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: "Enter a valid email address." });
+    }
+
+    const user = await User.findOne({ "personal_info.email": email });
+
+    // Mitigate user enumeration: always return 200 even if email is not found
+    if (!user) {
+      return res.status(200).json({
+        message:
+          "If an account with that email exists, a password reset link has been sent.",
+      });
+    }
+
+    if (user.google_auth && !user.personal_info.password) {
+      return res.status(400).json({
+        error:
+          "This account was registered using Google Sign-In. Please sign in using Google.",
+      });
+    }
+
+    // Generate random 32-byte hex token
+    const resetToken = crypto.randomBytes(32).toString("hex");
+
+    // Store SHA-256 hashed token in the database
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
+    user.resetPasswordToken = hashedToken;
+    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour expiration
+
+    await user.save();
+
+    // Send reset email asynchronously (non-blocking)
+    sendPasswordResetEmail(
+      email,
+      user.personal_info.fullname,
+      resetToken
+    ).catch((err) =>
+      console.error("[EMAIL-ERROR] Failed to send password reset email:", err.message)
+    );
+
+    return res.status(200).json({
+      message:
+        "If an account with that email exists, a password reset link has been sent.",
+    });
+  } catch (err) {
+    console.error("[SECURITY-CRITICAL] Forgot password error:", err.message);
+    return res
+      .status(500)
+      .json({ error: "An unexpected error occurred. Please try again later." });
+  }
+};
+
+/**
+ * Resets user password using the token provided via email.
+ */
+export const resetPassword = async (req, res) => {
+  let { token, newPassword, password } = req.body;
+  const rawToken = token || req.query.token;
+  const finalPassword = newPassword || password;
+
+  try {
+    if (!rawToken) {
+      return res.status(400).json({ error: "Reset token is required." });
+    }
+
+    if (!finalPassword) {
+      return res.status(400).json({ error: "New password is required." });
+    }
+
+    if (!passwordRegex.test(finalPassword)) {
+      return res.status(403).json({
+        error:
+          "Password should be 8 to 20 characters long with at least 1 numeric, 1 lowercase, 1 uppercase, and 1 special symbol.",
+      });
+    }
+
+    // Hash incoming token to match database hash
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(rawToken)
+      .digest("hex");
+
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        error: "Password reset token is invalid or has expired.",
+      });
+    }
+
+    const hashedPassword = await hashPassword(finalPassword);
+
+    user.personal_info.password = hashedPassword;
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+    user.loginAttempts = 0;
+    user.lockUntil = null;
+
+    await user.save();
+
+    return res.status(200).json({
+      message:
+        "Password has been reset successfully. You can now log in with your new password.",
+    });
+  } catch (err) {
+    console.error("[SECURITY-CRITICAL] Reset password error:", err.message);
+    return res
+      .status(500)
+      .json({ error: "An unexpected error occurred. Please try again later." });
   }
 };
