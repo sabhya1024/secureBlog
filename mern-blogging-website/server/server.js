@@ -43,17 +43,43 @@ const uploadLimiter = rateLimit({
 
 server.use(compression());
 server.use(express.json({ limit: "10kb" }));
-server.use(mongoSanitize());
+
+// Express 5 compatible sanitization middleware (mutates objects without reassigning getter)
+server.use((req, res, next) => {
+  if (req.body) mongoSanitize.sanitize(req.body);
+  if (req.params) mongoSanitize.sanitize(req.params);
+  if (req.query) mongoSanitize.sanitize(req.query);
+  next();
+});
+
 server.use(helmet());
 server.use(cookieParser());
 server.use(globalLimiter);
 
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(",").map((o) => o.trim().replace(/\/$/, ""))
+  : ["http://localhost:5173"];
+
 server.use(
   cors({
-    origin: process.env.FRONTEND_URL,
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const cleanOrigin = origin.replace(/\/$/, "");
+      if (
+        allowedOrigins.includes(cleanOrigin) ||
+        cleanOrigin.endsWith(".vercel.app")
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
     credentials: true,
   }),
 );
+
+server.get("/api/health", (req, res) => {
+  res.status(200).json({ status: "healthy", timestamp: new Date().toISOString() });
+});
 
 server.use("/api/auth", authLimiter, authRoutes);
 server.use("/api/upload", uploadLimiter, uploadRoutes);
