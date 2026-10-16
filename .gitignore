@@ -6,3 +6,9 @@ dist/
 mern-blogging-website/*.md
 *.txt
 fetch_transcript.py
+
+# Local/unnecessary files
+CLOUDINARY_IMAGE_UPLOAD_GUIDE.md
+System+Design+-+updated+-+Section+12.pdf
+UNNECESSARY_FILES/
+mern-blogging-website/takeReference/
