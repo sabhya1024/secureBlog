@@ -136,6 +136,16 @@ const UserAuthForm = ({ type }) => {
                 icon="fi-rr-key "
               />
 
+              {type === "signin" && (
+                <div className="text-right -mt-2 mb-4">
+                  <Link
+                    to="/forgot-password"
+                    className="text-sm text-dark-grey underline hover:text-black">
+                    Forgot password?
+                  </Link>
+                </div>
+              )}
+
               <button className="btn-dark center mt-14 " type="submit">
                 {type.replace("-", " ")}
               </button>
