@@ -636,6 +636,10 @@ export const deleteComment = async (req, res) => {
   const user_id = req.user;
   const { _id } = req.body;
 
+  if (!_id || typeof _id !== "string") {
+    return res.status(400).json({ error: "Invalid comment ID" });
+  }
+
   try {
     const comment = await Comment.findById(_id);
 
@@ -643,10 +647,12 @@ export const deleteComment = async (req, res) => {
       return res.status(404).json({ error: "Comment not found" });
     }
 
-    if (
-      user_id === comment.commented_by.toString() ||
-      user_id === comment.blog_author.toString()
-    ) {
+    const requestingUser = await User.findById(user_id).select("role");
+    const isAdmin = requestingUser && (requestingUser.role === "admin" || requestingUser.role === "superadmin");
+    const isCommentAuthor = user_id === comment.commented_by.toString();
+    const isBlogAuthor = user_id === comment.blog_author.toString();
+
+    if (isCommentAuthor || isBlogAuthor || isAdmin) {
       await deleteCommentsRecursive(_id);
       return res.status(200).json({ status: "done" });
     } else {
@@ -655,7 +661,7 @@ export const deleteComment = async (req, res) => {
         .json({ error: "You do not have permission to delete this comment" });
     }
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Failed to delete comment" });
   }
 };
 
@@ -663,16 +669,24 @@ export const deleteBlog = async (req, res) => {
   let user_id = req.user;
   let { blog_id } = req.body;
 
+  if (!blog_id || typeof blog_id !== "string") {
+    return res.status(400).json({ error: "Invalid blog ID" });
+  }
+
   try {
-    // First, find the blog to verify ownership
+    // Find the blog
     const blog = await Blog.findOne({ blog_id });
 
     if (!blog) {
       return res.status(404).json({ error: "Blog not found" });
     }
 
-    // Verify the authenticated user is the blog's author
-    if (blog.author.toString() !== user_id) {
+    // Check if requester is author OR admin/superadmin
+    const requestingUser = await User.findById(user_id).select("role");
+    const isAdmin = requestingUser && (requestingUser.role === "admin" || requestingUser.role === "superadmin");
+    const isAuthor = blog.author.toString() === user_id;
+
+    if (!isAuthor && !isAdmin) {
       console.warn(
         `[${new Date().toISOString()}] [SECURITY] User ${user_id} attempted to delete blog ${blog_id} owned by ${blog.author}`,
       );
@@ -681,14 +695,15 @@ export const deleteBlog = async (req, res) => {
         .json({ error: "You do not have permission to delete this blog" });
     }
 
-    // Authorized — proceed with deletion
+    // Authorized (Author or Admin/Superadmin) — proceed with deletion
     await Blog.findOneAndDelete({ _id: blog._id });
 
     await Notification.deleteMany({ blog: blog._id });
     await Comment.deleteMany({ blog_id: blog._id });
 
+    // Decrement posts from the original blog author's account (not the admin's)
     await User.findOneAndUpdate(
-      { _id: user_id },
+      { _id: blog.author },
       { 
         $pull: { blogs: blog._id }, 
         $inc: { "account_info.total_posts": -1 }
@@ -697,6 +712,6 @@ export const deleteBlog = async (req, res) => {
 
     return res.status(200).json({ status: "done" });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Failed to delete blog" });
   }
 };
